@@ -15,8 +15,10 @@ Rules for agents and humans: [CLAUDE.md](CLAUDE.md). Reporting a vulnerability: 
 
 ```text
 src/airtimesat_platform/
-  gateway/    The only code that talks to IWS. Public port: gateway/api.py. Built in stage S3.
-  masker/     Recorder and masker: the only path from agents to SITEST. Stage S2.
+  gateway/    The only code that talks to IWS. Ports: gateway/api.py (console), gateway/sitest_port.py
+              (recorder). SITEST signer core in stage S2, the rest in stage S3.
+  masker/     Masking engine: replaces every identifier in SITEST data. Stage S2.
+  recorder/   CTO-only CLI that runs reviewed recording plans against SITEST. Stage S2.
   domain/     Normalized domain model (anti-corruption layer). Pure Python.
   console/    Ops console (FastAPI + Jinja2/HTMX). Only /healthz for now.
   archive/    Phase 2 TAP archive job. Stage S1.

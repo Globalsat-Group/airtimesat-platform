@@ -53,6 +53,16 @@ override.tf.json
 # Raw SITEST or production captures; only masked fixtures may be committed.
 recordings/
 captures/
+# The one exception: masked recordings written by the recorder (design s2-recorder-masker
+# §7.3, §9.1). Raw captures stay ignored everywhere else.
+!/tests/fixtures/masked/recordings/
+# The recorder's vault (with SQLite's -journal, -wal and -shm side files), its age-encrypted
+# backups and Keeper exports: never committed.
+*.sqlite
+*.sqlite-*
+*.age
+[Kk]eeper*.json
+[Kk]eeper*.csv
 # TAP files.
 *.tap
 *.TAP

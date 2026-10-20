@@ -14,11 +14,18 @@
 # Mandatory line-by-line CTO review (re-plan §3.3)
 # Gateway: signing, permits, operation registry, any code that writes to IWS
 /src/airtimesat_platform/gateway/         @imtgsat
-# Recorder and masker: the only path from agents to SITEST. Its tests and the
-# leak tests live outside the package, so they are matched by name (re-plan §3.4).
+# Masker: the masking engine for SITEST data. Its tests, the leak tests and the
+# masked fixtures live outside the package, so they are matched by name (re-plan §3.4).
 /src/airtimesat_platform/masker/          @imtgsat
 **/*mask*                                 @imtgsat
 **/*leak*                                 @imtgsat
+# Recorder (it writes to IWS), its tests, and the recording plans (every plan is a
+# live-call request the CTO runs; design s2-recorder-masker §7.3)
+/src/airtimesat_platform/recorder/        @imtgsat
+/tests/recorder/                          @imtgsat
+/recording-plans/                         @imtgsat
+# Runbooks: they steer the CTO's manual IWS calls (DEACTIVE, the Beta-name check)
+/docs/runbooks/                           @imtgsat
 # Secrets handling, wherever it lives
 /src/airtimesat_platform/common/secrets*  @imtgsat
 **/*secret*                               @imtgsat

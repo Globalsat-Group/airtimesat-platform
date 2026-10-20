@@ -5,18 +5,26 @@ description = "Globalsat platform over Iridium: Phase 1 Ops console and IWS gate
 readme = "README.md"
 license = "LicenseRef-Proprietary"
 requires-python = ">=3.13"
-# Runtime dependencies for the foundations only. Gateway libraries (aiohttp, xsdata, lxml)
-# arrive with stage S3, not before. Exact versions live in uv.lock.
+# Runtime dependencies. Stage S2 adds the recorder's IWS path (design s2-recorder-masker §7.3):
+# aiohttp (gateway transport), lxml (masker and gateway XML), cryptography (vault values) and
+# pyyaml (only behind the recording plans' strict loader). xsdata arrives with stage S3.
+# No boto3, asyncpg or new web framework in S2. Exact versions live in uv.lock.
 dependencies = [
+    "aiohttp>=3.14.5,<4",
+    "cryptography>=50.0.2,<51",  # major lines move often: each one is a reviewed bump
     "fastapi>=0.150.0,<0.151",  # still 0.x: pinned to the minor line (Annex F, §6.1)
     "jinja2>=3.1.6,<4",
+    "lxml>=6.1.3,<7",
     "pydantic-settings>=2.16.0,<3",
+    "pyyaml>=6.0.3,<7",
     "uvicorn>=0.54.0,<0.55",
 ]
 
 [dependency-groups]
 dev = [
+    "hypothesis>=6.170.5,<7",
     "import-linter>=2.15,<3",
+    "lxml-stubs>=0.5.1,<0.6",  # lxml 6 ships no type information
     "pip-audit>=2.10.1,<3",
     "pip-licenses>=5.5.5,<6",
     "pyright[nodejs]>=1.1.414,<1.2",
@@ -97,6 +105,7 @@ branch = true
 # ---------------------------------------------------------------- import-linter
 # Module boundaries. tests/test_import_contracts.py fails if any contract below is removed.
 # Changing these contracts changes the architecture: this file is on the mandatory-review list.
+# The S2 changes follow design docs/design/s2-recorder-masker.md §7.3.
 [tool.importlinter]
 root_packages = ["airtimesat_platform"]
 include_external_packages = true
@@ -110,6 +119,7 @@ forbidden_modules = [
     "airtimesat_platform.gateway",
     "airtimesat_platform.masker",
     "airtimesat_platform.archive",
+    "airtimesat_platform.recorder",
 ]
 # gateway.api is the gateway's public port. The gateway may use its own internals behind it,
 # so only direct imports from console are checked.
@@ -131,6 +141,7 @@ forbidden_modules = [
     "airtimesat_platform.console",
     "airtimesat_platform.archive",
     "airtimesat_platform.common",
+    "airtimesat_platform.recorder",
 ]
 
 [[tool.importlinter.contracts]]
@@ -153,13 +164,25 @@ forbidden_modules = [
 id = "masker-isolated"
 name = "masker imports only common"
 type = "forbidden"
+# The masking engine stays pure: the recorder depends on it, never the reverse.
 source_modules = ["airtimesat_platform.masker"]
 forbidden_modules = [
     "airtimesat_platform.gateway",
     "airtimesat_platform.domain",
     "airtimesat_platform.console",
     "airtimesat_platform.archive",
+    "airtimesat_platform.recorder",
 ]
+
+[[tool.importlinter.contracts]]
+id = "masker-no-transport"
+name = "masker imports no HTTP or SOAP binding library"
+type = "forbidden"
+# The masker may use lxml to mask; HTTP stays in the gateway. Indirect imports are checked
+# too: the masker imports no app code that could pull HTTP in.
+source_modules = ["airtimesat_platform.masker"]
+forbidden_modules = ["aiohttp", "xsdata"]
+allow_indirect_imports = false
 
 [[tool.importlinter.contracts]]
 id = "archive-isolated"
@@ -170,20 +193,86 @@ forbidden_modules = [
     "airtimesat_platform.gateway",
     "airtimesat_platform.masker",
     "airtimesat_platform.console",
+    "airtimesat_platform.recorder",
 ]
 
 [[tool.importlinter.contracts]]
 id = "soap-libraries-gateway-only"
 name = "only gateway imports aiohttp, xsdata and lxml"
 type = "forbidden"
-# masker is listed until stage S2 needs lxml for masking; removing it is a reviewed change.
+# masker (lxml only, see masker-no-transport) and recorder (see recorder-no-soap-libraries)
+# have their own contracts.
 source_modules = [
     "airtimesat_platform.console",
     "airtimesat_platform.domain",
     "airtimesat_platform.archive",
     "airtimesat_platform.common",
-    "airtimesat_platform.masker",
 ]
 forbidden_modules = ["aiohttp", "xsdata", "lxml"]
 # console reaches the gateway through gateway.api; only direct imports are checked.
 allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+id = "recorder-boundary"
+name = "recorder imports only common, masker and gateway.sitest_port"
+type = "forbidden"
+source_modules = ["airtimesat_platform.recorder"]
+forbidden_modules = [
+    "airtimesat_platform.gateway",
+    "airtimesat_platform.console",
+    "airtimesat_platform.domain",
+    "airtimesat_platform.archive",
+]
+# The recorder reaches IWS only through the SITEST port. The gateway may use its own
+# internals behind it, so only direct imports from recorder are checked.
+ignore_imports = [
+    "airtimesat_platform.recorder -> airtimesat_platform.gateway.sitest_port",
+    "airtimesat_platform.recorder.** -> airtimesat_platform.gateway.sitest_port",
+]
+unmatched_ignore_imports_alerting = "none"
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+id = "recorder-no-soap-libraries"
+name = "recorder imports aiohttp, xsdata and lxml only through masker or gateway"
+type = "forbidden"
+# XML parsing stays in the masker, HTTP in the gateway.
+source_modules = ["airtimesat_platform.recorder"]
+forbidden_modules = ["aiohttp", "xsdata", "lxml"]
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+id = "sitest-only"
+name = "recorder, masker and the SITEST port never reach a production-capable port"
+type = "forbidden"
+# A Beta or production endpoint in agent-reachable code is a defect (CLAUDE.md). gateway.api
+# is the console's port and reaches production endpoints from S4. gateway.endpoints_production
+# does not exist yet; import-linter skips a forbidden module that is not in the graph, so
+# tests/test_import_contracts.py pins the name.
+source_modules = [
+    "airtimesat_platform.recorder",
+    "airtimesat_platform.masker",
+    "airtimesat_platform.gateway.sitest_port",
+]
+forbidden_modules = [
+    "airtimesat_platform.gateway.api",
+    "airtimesat_platform.gateway.endpoints_production",
+]
+allow_indirect_imports = false
+
+[[tool.importlinter.contracts]]
+id = "gateway-one-way"
+name = "gateway imports neither masker nor recorder"
+type = "forbidden"
+source_modules = ["airtimesat_platform.gateway"]
+forbidden_modules = [
+    "airtimesat_platform.masker",
+    "airtimesat_platform.recorder",
+]
+
+[[tool.importlinter.contracts]]
+id = "ports-apart"
+name = "gateway.api never imports gateway.sitest_port"
+type = "forbidden"
+source_modules = ["airtimesat_platform.gateway.api"]
+forbidden_modules = ["airtimesat_platform.gateway.sitest_port"]
