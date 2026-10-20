@@ -1,6 +1,8 @@
 terraform {
-  # Pinned. CI installs the same version (.github/workflows/ci.yml, TERRAFORM_VERSION).
-  required_version = "1.9.8"
+  # A floor, not a pin: CI installs exactly TERRAFORM_VERSION (.github/workflows/ci.yml).
+  # An exact pin made Dependabot's newer Terraform refuse to init, so it could never
+  # propose provider updates.
+  required_version = ">= 1.9.8, < 2.0.0"
 
   required_providers {
     aws = {
