@@ -1,0 +1,93 @@
+# Synthetic generated field map for the masker tests. The real one is generated from the
+# SITEST WSDL into gateway/wsdl/fieldmap/ once it is harvested (design §4.5, §10.2).
+# Operation and element names follow the IWS catalog; the structure is invented.
+# Every path is UNCLASSIFIED here; proposals take effect only when copied to overrides.
+format: airtimesat-fieldmap/1
+source: synthetic-test-schema
+paths:
+  # getSubscriberAccount: two account subtypes keyed by xsi:type
+  - {operation: getSubscriberAccount, direction: request, path: request, xsd_type: complex}
+  - {operation: getSubscriberAccount, direction: request, path: request/accountNo, xsd_type: string}
+  - {operation: getSubscriberAccount, direction: response, path: getSubscriberAccountResponse, xsd_type: complex}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]", xsd_type: complex}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/accountNumber", xsd_type: string}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/accountStatus", xsd_type: enum, proposed: KEEP}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/imei", xsd_type: string}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/serviceProviderAccountNumber", xsd_type: string}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/subscriberAccountMetadata", xsd_type: complex, min_occurs: 0}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/subscriberAccountMetadata/spReference", xsd_type: string, min_occurs: 0, nillable: true}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/deliveryDestinations", xsd_type: complex, min_occurs: 0, max_occurs: unbounded}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/deliveryDestinations/deliveryMethod", xsd_type: enum, proposed: KEEP}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/deliveryDestinations/destination", xsd_type: string}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/deliveryDestinations/port", xsd_type: int, min_occurs: 0}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/createdBy", xsd_type: string, min_occurs: 0}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/activationDate", xsd_type: dateTime, proposed: KEEP}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/description", xsd_type: string, min_occurs: 0}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]", xsd_type: complex}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/accountNumber", xsd_type: string}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/msisdn", xsd_type: string}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/sim", xsd_type: string}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/imei", xsd_type: string}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/imsi", xsd_type: long}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/twoStagePin", xsd_type: string}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/captainPin", xsd_type: string, nillable: true}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/contactEmail", xsd_type: string, min_occurs: 0}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/ip", xsd_type: string, min_occurs: 0}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/latitude", xsd_type: decimal, min_occurs: 0, proposed: KEEP}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/vessel", xsd_type: complex, min_occurs: 0}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/vessel/vesselName", xsd_type: string}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/vessel/imo", xsd_type: string, min_occurs: 0}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/vessel/mmsi", xsd_type: string, min_occurs: 0}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/vessel/buildYear", xsd_type: int, min_occurs: 0}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/vessel/personCapacity", xsd_type: int, nillable: true}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/vessel/vesselTon", xsd_type: int}
+  # getSystemStatus: versions and counts that must not trip the detectors
+  - {operation: getSystemStatus, direction: request, path: request, xsd_type: complex}
+  - {operation: getSystemStatus, direction: response, path: getSystemStatusResponse, xsd_type: complex}
+  - {operation: getSystemStatus, direction: response, path: getSystemStatusResponse/iwsVersion, xsd_type: string}
+  - {operation: getSystemStatus, direction: response, path: getSystemStatusResponse/status, xsd_type: enum, proposed: KEEP}
+  - {operation: getSystemStatus, direction: response, path: getSystemStatusResponse/activeCount, xsd_type: int}
+  - {operation: getSystemStatus, direction: response, path: getSystemStatusResponse/statusDescription, xsd_type: string, min_occurs: 0}
+  - {operation: getSystemStatus, direction: response, path: getSystemStatusResponse/buildHost, xsd_type: string, min_occurs: 0}
+  # accountSearch: a typed filter in the request, an array in the response
+  - {operation: accountSearch, direction: request, path: request, xsd_type: complex}
+  - {operation: accountSearch, direction: request, path: request/filterType, xsd_type: enum, proposed: KEEP}
+  - {operation: accountSearch, direction: request, path: request/filterValue, xsd_type: string}
+  - {operation: accountSearch, direction: request, path: request/filterCond, xsd_type: enum, min_occurs: 0, proposed: KEEP}
+  - {operation: accountSearch, direction: request, path: request/limit, xsd_type: int}
+  - {operation: accountSearch, direction: request, path: request/comment, xsd_type: string, min_occurs: 0}
+  - {operation: accountSearch, direction: response, path: accountSearchResponse, xsd_type: complex}
+  - {operation: accountSearch, direction: response, path: accountSearchResponse/accounts, xsd_type: complex, min_occurs: 0}
+  - {operation: accountSearch, direction: response, path: accountSearchResponse/accounts/account, xsd_type: complex, min_occurs: 0, max_occurs: unbounded}
+  - {operation: accountSearch, direction: response, path: accountSearchResponse/accounts/account/accountNumber, xsd_type: string}
+  - {operation: accountSearch, direction: response, path: accountSearchResponse/accounts/account/imei, xsd_type: string, min_occurs: 0}
+  - {operation: accountSearch, direction: response, path: accountSearchResponse/accounts/account/vesselName, xsd_type: string, min_occurs: 0}
+  - {operation: accountSearch, direction: response, path: accountSearchResponse/accounts/account/status, xsd_type: string, min_occurs: 0}
+  # setSubscriberAccountStatus: a write request typed by updateType
+  - {operation: setSubscriberAccountStatus, direction: request, path: request, xsd_type: complex}
+  - {operation: setSubscriberAccountStatus, direction: request, path: request/updateType, xsd_type: enum, proposed: KEEP}
+  - {operation: setSubscriberAccountStatus, direction: request, path: request/value, xsd_type: string}
+  - {operation: setSubscriberAccountStatus, direction: request, path: request/newStatus, xsd_type: enum, proposed: KEEP}
+  - {operation: setSubscriberAccountStatus, direction: request, path: request/reason, xsd_type: string, min_occurs: 0}
+  - {operation: setSubscriberAccountStatus, direction: request, path: request/contact, xsd_type: string, min_occurs: 0}
+  - {operation: setSubscriberAccountStatus, direction: request, path: request/owner, xsd_type: string, min_occurs: 0}
+  - {operation: setSubscriberAccountStatus, direction: response, path: setSubscriberAccountStatusResponse, xsd_type: complex}
+  - {operation: setSubscriberAccountStatus, direction: response, path: setSubscriberAccountStatusResponse/returnMessage, xsd_type: string, min_occurs: 0}
+  # getIwsRequests: escaped XML payloads of other calls
+  - {operation: getIwsRequests, direction: request, path: request, xsd_type: complex}
+  - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse, xsd_type: complex}
+  - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse/entry, xsd_type: complex, min_occurs: 0, max_occurs: unbounded}
+  - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse/entry/requestedOperation, xsd_type: string}
+  - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse/entry/requestId, xsd_type: long}
+  - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse/entry/caller, xsd_type: string, min_occurs: 0}
+  - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse/entry/request, xsd_type: string, min_occurs: 0}
+  - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse/entry/response, xsd_type: string, min_occurs: 0}
+  - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse/entry/errorMessage, xsd_type: string, min_occurs: 0}
+  # SOAP 1.1 faults, shared by every operation
+  - {operation: "*", direction: fault, path: Fault, xsd_type: complex}
+  - {operation: "*", direction: fault, path: Fault/faultcode, xsd_type: string}
+  - {operation: "*", direction: fault, path: Fault/faultstring, xsd_type: string}
+  - {operation: "*", direction: fault, path: Fault/detail, xsd_type: complex, min_occurs: 0}
+  - {operation: "*", direction: fault, path: Fault/detail/IwsFault, xsd_type: complex}
+  - {operation: "*", direction: fault, path: Fault/detail/IwsFault/errorCode, xsd_type: string}
+  - {operation: "*", direction: fault, path: Fault/detail/IwsFault/errorMessage, xsd_type: string, min_occurs: 0}

@@ -1,0 +1,63 @@
+# Reviewed false positives of scripts/leak_scan.py (design s2-recorder-masker §8.3).
+# Gate configuration: every entry needs the CTO's review. An entry names the path, the
+# detector, the SHA-256 of the matched text (never the text itself) and a reason. It
+# allows that exact text at that path only. Never add an entry for a real identifier:
+# remove the value instead.
+
+[[allow]]
+path = "docs/design/s2-recorder-masker.md"
+detector = "IPV4"
+sha256 = "8178fe390b377adc68b2bf13d2c811e00b7ff39f165a867be4c4b293d9607073"
+reason = "IWS version-string example quoted from Annex E §1.4 (§8.4, §8.5 #15), not an address"
+
+[[allow]]
+path = "tests/masker/test_mask_redteam.py"
+detector = "IPV4"
+sha256 = "8178fe390b377adc68b2bf13d2c811e00b7ff39f165a867be4c4b293d9607073"
+reason = "The same version string, used by the no-false-block test of design §8.5 #15"
+
+# The next seven entries are for the signer-core PR (S2 PR C), whose tests land separately.
+# They are here because this file is created by the masking-engine PR; without them main
+# fails the leak scan whichever of the two PRs merges second.
+
+[[allow]]
+path = "tests/gateway/test_signing.py"
+detector = "SIGNATURE"
+sha256 = "fae676b3684fa5a30dc30842260a5f883bae1c01984058d0dfe018c4c41318b7"
+reason = "ST-02 offline vector: HMAC-SHA1 of a synthetic secret, computed with openssl"
+
+[[allow]]
+path = "tests/gateway/test_signing.py"
+detector = "SIGNATURE"
+sha256 = "8d2bb95634333d1e5b1152a5997c231f1641516a91721f381bb370aba0371670"
+reason = "ST-02 offline vector: HMAC-SHA1 of a synthetic secret, computed with openssl"
+
+[[allow]]
+path = "tests/gateway/test_signing.py"
+detector = "SIGNATURE"
+sha256 = "776a7aa9d46c69fe540ad15d633c6ab40cad04188f455e8d7411d34d6be6866f"
+reason = "ST-02 offline vector: HMAC-SHA1 of a synthetic secret, computed with openssl"
+
+[[allow]]
+path = "tests/gateway/test_signing.py"
+detector = "SIGNATURE"
+sha256 = "b289ec925a923218f4106620c8466839f1e504f7be4e096d4581d629224266ef"
+reason = "ST-02 offline vector: HMAC-SHA1 of a synthetic secret, computed with openssl"
+
+[[allow]]
+path = "tests/gateway/test_signing.py"
+detector = "SIGNATURE"
+sha256 = "4739db23a07f87a8f20b161786154d84e1f6849187a441073f5ccfa41d916911"
+reason = "ST-02 offline vector: HMAC-SHA1 of a synthetic secret, computed with openssl"
+
+[[allow]]
+path = "tests/gateway/test_signing.py"
+detector = "SIGNATURE"
+sha256 = "29a08341eeb406b9ea8dd182959f064af249c28e3d6114f9983863d32deb985b"
+reason = "ST-02 case-sensitivity vector: HMAC-SHA1 of a synthetic secret, computed with openssl"
+
+[[allow]]
+path = "tests/gateway/test_sitest_transport.py"
+detector = "EMAIL"
+sha256 = "213b689cdf3c552edb55cc00b76369336c48a0835cd02b5faa86e99dae5f481b"
+reason = "A SITEST URL with a userinfo part that the endpoint check must refuse; not an address"

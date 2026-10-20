@@ -1,0 +1,22 @@
+# Reviewed field-map classifications (design s2-recorder-masker §4.5). The only place a
+# treatment is assigned, KEEP included. Every entry names a path of the generated map
+# under gateway/wsdl/fieldmap/. Paths not listed here stay UNCLASSIFIED and block at
+# runtime. Agents propose entries in a PR; the CTO reviews each one.
+#
+# Entry keys: operation, direction (request | response | fault), path, treatment
+# (KEEP, T-NUM, T-STR, T-IP, T-HOST, T-EMAIL, P-ONE, C, G, D, F, N, TYPED), and as needed:
+#   type        T-NUM type (IMEI, ICCID, ...), T-STR or P-ONE label, or C label
+#   sentinel    type-valid value for D on a required, non-nillable, non-string element
+#   operational true on a KEEP element that is a version, size, count or operational ID
+#   typed_by    {sibling: <element>, values: {<enum value>: "T-NUM:IMEI" | "T-EMAIL" | ...}}
+#   embedded    {format: xml, operation_from: <sibling element>, direction: request | response}
+#   literals    C only: values kept as they are (for example GLOBAL)
+#   reason      free text for the reviewer; never a real value
+#
+# Templates (treatment F) are added by the CTO only, never by agents, and never copied
+# from the catalog: {id: TPL-001, text: "... {CONTRACT} ..."} with typed slots.
+#
+# Empty until the SITEST WSDL is harvested (design §10.2 step 1).
+format: airtimesat-overrides/1
+entries: []
+templates: []

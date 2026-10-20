@@ -21,8 +21,8 @@ CHECKOV = run_checkov() { rc=0; out="$$(checkov "$$@" --quiet --compact)" || rc=
 # request or a comment.
 BANNED_TRIGGERS := pull_request_target|workflow_run|issue_comment
 
-.PHONY: help sync lint format typecheck contracts test security gitleaks audit licences \
-	terraform workflows check run
+.PHONY: help sync lint format typecheck contracts test security gitleaks leak-scan audit \
+	licences terraform workflows check run
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-11s %s\n", $$1, $$2}'
@@ -47,10 +47,13 @@ contracts: ## import-linter module boundaries
 test: ## pytest with coverage
 	$(UV_RUN) pytest
 
-security: gitleaks audit licences ## gitleaks, pip-audit and the licence gate
+security: gitleaks leak-scan audit licences ## gitleaks, leak scan, pip-audit and the licence gate
 
 gitleaks: ## Scan the working tree for secrets
 	gitleaks dir . --redact --no-banner --verbose
+
+leak-scan: ## Scan the working tree for real identifiers (design s2-recorder-masker §8.3)
+	$(UV_RUN) python scripts/leak_scan.py
 
 audit: ## pip-audit over every locked dependency, dev group included
 	@req="$$(mktemp)"; trap 'rm -f "$$req"' EXIT; \
