@@ -1,0 +1,48 @@
+# Dependency updates. Re-plan §8.7 batches dependency PRs monthly, so version
+# updates run monthly and minor/patch bumps arrive as one grouped PR per
+# ecosystem. Security updates are not bound to this schedule: enable
+# "Dependabot security updates" in the repository settings (docs/SETUP_CHECKLIST.md).
+version: 2
+
+updates:
+  # Python dependencies managed by uv (pyproject.toml + uv.lock).
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    labels: ["dependencies"]
+    groups:
+      python-minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  # Actions stay pinned to full commit SHAs; Dependabot updates the SHA and
+  # the version comment together.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+    labels: ["dependencies"]
+    groups:
+      actions-minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  # Terraform providers and module constraints.
+  - package-ecosystem: "terraform"
+    directories:
+      - "/infra/terraform/envs/*"
+      - "/infra/terraform/modules/*"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "infra"
+    labels: ["dependencies"]
+    groups:
+      terraform-minor-and-patch:
+        update-types: ["minor", "patch"]

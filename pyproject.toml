@@ -1,0 +1,189 @@
+[project]
+name = "airtimesat-platform"
+version = "0.0.0"
+description = "Globalsat platform over Iridium: Phase 1 Ops console and IWS gateway, Phase 2 TAP archive and mediation."
+readme = "README.md"
+license = "LicenseRef-Proprietary"
+requires-python = ">=3.12"
+# Runtime dependencies for the foundations only. Gateway libraries (aiohttp, xsdata, lxml)
+# arrive with stage S3, not before. Exact versions live in uv.lock.
+dependencies = [
+    "fastapi>=0.150.0,<0.151",  # still 0.x: pinned to the minor line (Annex F, §6.1)
+    "jinja2>=3.1.6,<4",
+    "pydantic-settings>=2.16.0,<3",
+    "uvicorn>=0.54.0,<0.55",
+]
+
+[dependency-groups]
+dev = [
+    "import-linter>=2.15,<3",
+    "pip-audit>=2.10.1,<3",
+    "pip-licenses>=5.5.5,<6",
+    "pyright[nodejs]>=1.1.414,<1.2",
+    "pytest>=9.1.1,<10",
+    "pytest-cov>=7.1.0,<8",
+    "ruff>=0.17.1,<0.18",
+]
+
+[build-system]
+requires = ["uv_build>=0.11.0,<0.12"]
+build-backend = "uv_build"
+
+[tool.uv]
+default-groups = ["dev"]
+
+# ---------------------------------------------------------------- ruff
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F",  # pycodestyle, pyflakes
+    "I",            # isort
+    "N",            # pep8-naming
+    "UP",           # pyupgrade
+    "B",            # bugbear
+    "A",            # builtins shadowing
+    "C4",           # comprehensions
+    "S",            # bandit
+    "SIM",          # simplify
+    "PT",           # pytest style
+    "TID",          # tidy imports
+    "RUF",          # ruff-specific
+    "D2", "D3", "D4",  # docstring formatting (docstrings are the placeholders for now)
+]
+ignore = [
+    "D203",  # conflicts with D211
+    "D213",  # conflicts with D212
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]  # assert is how pytest checks
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+# ---------------------------------------------------------------- pyright
+[tool.pyright]
+typeCheckingMode = "strict"
+pythonVersion = "3.12"
+include = ["src", "tests", "scripts"]
+extraPaths = ["scripts"]
+venvPath = "."
+venv = ".venv"
+reportMissingModuleSource = "error"
+reportUnnecessaryTypeIgnoreComment = "error"
+
+# ---------------------------------------------------------------- pytest
+[tool.pytest.ini_options]
+minversion = "9.0"
+testpaths = ["tests"]
+pythonpath = ["scripts"]
+addopts = [
+    "--import-mode=importlib",
+    "--strict-markers",
+    "--strict-config",
+    "--cov=airtimesat_platform",
+    "--cov-report=term-missing",
+]
+xfail_strict = true
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+branch = true
+
+# ---------------------------------------------------------------- import-linter
+# Module boundaries. tests/test_import_contracts.py fails if any contract below is removed.
+# Changing these contracts changes the architecture: this file is on the mandatory-review list.
+[tool.importlinter]
+root_packages = ["airtimesat_platform"]
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+id = "console-boundary"
+name = "console imports only domain, common and gateway.api"
+type = "forbidden"
+source_modules = ["airtimesat_platform.console"]
+forbidden_modules = [
+    "airtimesat_platform.gateway",
+    "airtimesat_platform.masker",
+    "airtimesat_platform.archive",
+]
+# gateway.api is the gateway's public port. The gateway may use its own internals behind it,
+# so only direct imports from console are checked.
+ignore_imports = [
+    "airtimesat_platform.console -> airtimesat_platform.gateway.api",
+    "airtimesat_platform.console.** -> airtimesat_platform.gateway.api",
+]
+unmatched_ignore_imports_alerting = "none"
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+id = "domain-pure"
+name = "domain imports nothing else from the app"
+type = "forbidden"
+source_modules = ["airtimesat_platform.domain"]
+forbidden_modules = [
+    "airtimesat_platform.gateway",
+    "airtimesat_platform.masker",
+    "airtimesat_platform.console",
+    "airtimesat_platform.archive",
+    "airtimesat_platform.common",
+]
+
+[[tool.importlinter.contracts]]
+id = "domain-no-io-frameworks"
+name = "domain uses no I/O frameworks"
+type = "forbidden"
+source_modules = ["airtimesat_platform.domain"]
+forbidden_modules = [
+    "fastapi",
+    "starlette",
+    "uvicorn",
+    "jinja2",
+    "pydantic_settings",
+    "aiohttp",
+    "xsdata",
+    "lxml",
+]
+
+[[tool.importlinter.contracts]]
+id = "masker-isolated"
+name = "masker imports only common"
+type = "forbidden"
+source_modules = ["airtimesat_platform.masker"]
+forbidden_modules = [
+    "airtimesat_platform.gateway",
+    "airtimesat_platform.domain",
+    "airtimesat_platform.console",
+    "airtimesat_platform.archive",
+]
+
+[[tool.importlinter.contracts]]
+id = "archive-isolated"
+name = "archive imports only domain and common"
+type = "forbidden"
+source_modules = ["airtimesat_platform.archive"]
+forbidden_modules = [
+    "airtimesat_platform.gateway",
+    "airtimesat_platform.masker",
+    "airtimesat_platform.console",
+]
+
+[[tool.importlinter.contracts]]
+id = "soap-libraries-gateway-only"
+name = "only gateway imports aiohttp, xsdata and lxml"
+type = "forbidden"
+# masker is listed until stage S2 needs lxml for masking; removing it is a reviewed change.
+source_modules = [
+    "airtimesat_platform.console",
+    "airtimesat_platform.domain",
+    "airtimesat_platform.archive",
+    "airtimesat_platform.common",
+    "airtimesat_platform.masker",
+]
+forbidden_modules = ["aiohttp", "xsdata", "lxml"]
+# console reaches the gateway through gateway.api; only direct imports are checked.
+allow_indirect_imports = true

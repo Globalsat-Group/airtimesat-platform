@@ -1,0 +1,13 @@
+# Reviewed licence exceptions, read by scripts/licence_gate.py (`make security`).
+# A package listed here passes the gate even though its licence is not allowed.
+# The licence must match what the gate reports, so a licence change needs a new review.
+# Adding an entry is a reviewed change: the CTO approves it in the pull request.
+#
+# Format, one table per package:
+#
+# [[exception]]
+# package = "example-package"
+# licence = "LGPL-3.0-or-later"
+# reason = "Used unmodified as a dynamically loaded library; no distribution outside Globalsat."
+# reviewed_by = "@imtgsat"
+# reviewed_on = 2026-10-20
