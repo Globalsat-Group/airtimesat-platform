@@ -4,7 +4,7 @@ version = "0.0.0"
 description = "Globalsat platform over Iridium: Phase 1 Ops console and IWS gateway, Phase 2 TAP archive and mediation."
 readme = "README.md"
 license = "LicenseRef-Proprietary"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 # Runtime dependencies for the foundations only. Gateway libraries (aiohttp, xsdata, lxml)
 # arrive with stage S3, not before. Exact versions live in uv.lock.
 dependencies = [
@@ -35,7 +35,7 @@ default-groups = ["dev"]
 # ---------------------------------------------------------------- ruff
 [tool.ruff]
 line-length = 100
-target-version = "py312"
+target-version = "py313"
 src = ["src", "tests", "scripts"]
 
 [tool.ruff.lint]
@@ -68,7 +68,7 @@ ban-relative-imports = "all"
 # ---------------------------------------------------------------- pyright
 [tool.pyright]
 typeCheckingMode = "strict"
-pythonVersion = "3.12"
+pythonVersion = "3.13"
 include = ["src", "tests", "scripts"]
 extraPaths = ["scripts"]
 venvPath = "."

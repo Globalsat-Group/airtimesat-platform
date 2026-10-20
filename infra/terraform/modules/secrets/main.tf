@@ -1,5 +1,6 @@
 # Secrets Manager entries for the IWS credentials, one secret per environment.
-# Re-plan §8.2: KMS-encrypted, only the gateway role reads the IWS secret, every read raises an alarm.
+# Re-plan §8.2: KMS-encrypted, only the gateway role (and, for SITEST only, the masker) reads an IWS secret
+# (CTO decision, 20 Oct 2026), every read raises an alarm.
 # Values are never in code: the CTO stores them by hand (re-plan §3.2). No aws_secretsmanager_secret_version here.
 
 resource "aws_secretsmanager_secret" "iws" {

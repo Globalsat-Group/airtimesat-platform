@@ -18,6 +18,17 @@ variable "retention_days" {
   }
 }
 
+variable "governance_admin_role_arns" {
+  description = "Full IAM role ARNs, path included, that may bypass governance retention or change the Object Lock configuration and the bucket policy: a break-glass role, and the Terraform deploy role if it must later change the bucket policy, this list or the retention. Decide it before the first apply: afterwards only a listed role can change it. Empty means nobody, short of the account root user."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for arn in var.governance_admin_role_arns : can(regex("^arn:aws[a-z-]*:iam::[0-9]{12}:role/", arn))])
+    error_message = "Each entry must be an IAM role ARN (arn:aws:iam::<account>:role/<name>)."
+  }
+}
+
 variable "kms_key_arn" {
   description = "ARN of the KMS key that encrypts archived objects."
   type        = string

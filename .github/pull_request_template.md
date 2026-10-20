@@ -11,9 +11,9 @@ Does this PR touch any of these? If yes, tick each one. The CTO reviews them lin
 - [ ] `src/airtimesat_platform/masker/`, or any `*mask*` / `*leak*` file (recorder and masker, its tests, leak tests)
 - [ ] `src/airtimesat_platform/common/secrets*`, or any `*secret*` file (secrets handling)
 - [ ] `infra/`, or any file matching `*iam*` / `*oidc*` (Terraform, IAM, GitHub OIDC trust policy)
-- [ ] `.github/` (workflows, CODEOWNERS, Dependabot)
+- [ ] `.github/` (workflows, CODEOWNERS, Dependabot, PR template)
 - [ ] `Dockerfile*`
-- [ ] `CLAUDE.md`, `pyproject.toml`, `uv.lock`, or gate configuration (`Makefile`, `.gitleaks.toml`, `.gitignore`, `licensing/`, `scripts/licence_gate.py`, `tests/test_import_contracts.py`)
+- [ ] `CLAUDE.md`, `pyproject.toml`, `uv.lock`, or gate configuration (`Makefile`, `.gitleaks.toml`, `.gitignore`, `.pre-commit-config.yaml`, `licensing/`, `scripts/licence_gate.py`, `tests/test_import_contracts.py`, `SECURITY.md`)
 
 ## Checklist
 

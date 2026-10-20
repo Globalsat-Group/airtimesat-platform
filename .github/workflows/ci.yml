@@ -25,7 +25,7 @@ defaults:
     shell: bash
 
 env:
-  PYTHON_VERSION: "3.12"
+  PYTHON_VERSION: "3.13"
   UV_VERSION: "0.11.32"
   TERRAFORM_VERSION: "1.9.8"
   CHECKOV_VERSION: "3.3.29"

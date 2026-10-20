@@ -51,3 +51,9 @@ variable "archive_retention_days" {
     error_message = "Set archive_retention_days (from Legal) when enable_archive_bucket is true."
   }
 }
+
+variable "archive_governance_admin_role_arns" {
+  description = "Full IAM role ARNs, path included, allowed to bypass the archive's governance retention or change its lock and bucket policy (break-glass, and the deploy role if Terraform must later change the archive policy, this list or archive_retention_days). Decide it before the first apply: afterwards only a listed role can change it. Empty means nobody, short of the account root user."
+  type        = list(string)
+  default     = []
+}

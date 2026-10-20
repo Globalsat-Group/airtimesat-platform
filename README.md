@@ -37,7 +37,7 @@ You need:
 
 | Tool | Version | Used by |
 | --- | --- | --- |
-| Python | 3.12 | everything (uv installs it if missing) |
+| Python | 3.13 | everything (uv installs it if missing) |
 | uv | 0.11.32 | Python dependencies and commands |
 | GNU make | any | entry point |
 | terraform | 1.9.8 | `make terraform` |

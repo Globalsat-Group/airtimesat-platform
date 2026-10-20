@@ -1,6 +1,7 @@
 # Code owners. With "Require review from Code Owners" on main, every PR needs
-# the owner's approval. Confirm the handle before the first push
-# (docs/SETUP_CHECKLIST.md, step 3).
+# the owner's approval. GitHub reads this file from a PR's base branch, so it
+# applies once it is on main. Confirm the handle before the foundations PR
+# merges (docs/SETUP_CHECKLIST.md, step 3).
 #
 # Later lines win. The default owner is listed first; the paths below are the
 # mandatory line-by-line review list of re-plan §3.3. They name the same owner

@@ -162,11 +162,50 @@ data "aws_iam_policy_document" "bucket" {
       values   = [var.kms_key_arn]
     }
   }
+
+  # Governance mode lets any principal with s3:BypassGovernanceRetention delete locked
+  # versions, and broad admin policies include it. Deny bypassing retention, and changing
+  # the lock or this policy, to everyone except the listed roles (CTO decision, 20 Oct 2026).
+  # aws:PrincipalArn is the role ARN (with its path) for every session of a listed role.
+  # With an empty list nobody can, short of the account root user, whom S3 always lets
+  # replace or delete a bucket policy (unless an SCP or RCP denies the root user).
+  # Lockout: after the first apply, Terraform can change this policy (this list included),
+  # the KMS key in it or the retention only when it runs as a listed role.
+  statement {
+    sid    = "DenyGovernanceBypass"
+    effect = "Deny"
+    actions = [
+      "s3:BypassGovernanceRetention",        # object-level: matches bucket/*
+      "s3:PutBucketObjectLockConfiguration", # IAM action of the PutObjectLockConfiguration API
+      "s3:PutBucketPolicy",
+      "s3:DeleteBucketPolicy",
+    ]
+    resources = [aws_s3_bucket.this.arn, "${aws_s3_bucket.this.arn}/*"]
+
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    dynamic "condition" {
+      for_each = length(var.governance_admin_role_arns) > 0 ? [1] : []
+      content {
+        test     = "ArnNotEquals"
+        variable = "aws:PrincipalArn"
+        values   = var.governance_admin_role_arns
+      }
+    }
+  }
 }
 
 resource "aws_s3_bucket_policy" "this" {
   bucket = aws_s3_bucket.this.id
   policy = data.aws_iam_policy_document.bucket.json
 
-  depends_on = [aws_s3_bucket_public_access_block.this]
+  # The policy denies changing the Object Lock configuration, so the default retention is set
+  # before the policy exists. Otherwise the first apply can fail half-way, already locked out.
+  depends_on = [
+    aws_s3_bucket_public_access_block.this,
+    aws_s3_bucket_object_lock_configuration.this,
+  ]
 }

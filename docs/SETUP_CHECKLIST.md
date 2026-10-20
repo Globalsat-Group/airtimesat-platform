@@ -2,7 +2,7 @@
 
 What only the CTO can do in GitHub to finish S0 action 3.1 (`Globalsat-Group/IWS`, `docs/delivery/s0/README.md`). Do the steps in this order. Each step says why, where, and when it is done.
 
-S0 action 3.1 is done when: the repository is private, `main` is protected, CI runs green on the first PR, and the bot identity's PRs need the CTO's approval.
+S0 action 3.1 is done when: the repository is private, `main` is protected, CI runs green on the first PR, the bot identity's PRs need the CTO's approval, and the bot cannot merge into `main` (only humans merge: CTO decision, 20 Oct 2026).
 
 ## Required status checks
 
@@ -24,7 +24,7 @@ The PR page shows them as `CI / lint (pull_request)` and so on, but the check na
 
 - **Why.** One private repository for both phases (CTO decision, 20 Oct 2026). Empty, so the first push is clean and there is no history to reconcile.
 - **Where.** GitHub → Globalsat-Group → Repositories → New repository. Name `airtimesat-platform`. Visibility **Private**. Do **not** add a README, a licence or a `.gitignore`.
-- **Done when.** `https://github.com/Globalsat-Group/airtimesat-platform` exists, is private and has no commits.
+- **Done when.** `https://github.com/Globalsat-Group/airtimesat-platform` exists, is private and has no commits. **Done on 20 Oct 2026** (step 6 then added a placeholder commit).
 
 ## 2. Restrict access to the CTO and the bot
 
@@ -35,7 +35,7 @@ The PR page shows them as `CI / lint (pull_request)` and so on, but the check na
 ## 3. Confirm the CODEOWNERS handle
 
 - **Why.** `.github/CODEOWNERS` names `@imtgsat` as owner of everything and of the mandatory-review paths (re-plan §3.3). A wrong handle, or one without write access, silently disables Code Owner review.
-- **Where.** Confirm `@imtgsat` is the CTO's account. If not, change every line of `.github/CODEOWNERS` before the first push. After the push, open `.github/CODEOWNERS` on GitHub: it shows a warning if a line is invalid.
+- **Where.** Confirm `@imtgsat` is the CTO's account. If not, change every line of `.github/CODEOWNERS` on `claude/repo-foundations` before the foundations PR merges (step 8). GitHub reads CODEOWNERS from a PR's base branch, so Code Owner review starts with the first PR after the foundations reach `main`. Then open `.github/CODEOWNERS` on `main` on GitHub: it highlights any invalid line.
 - **Done when.** The handle is confirmed and GitHub shows no CODEOWNERS errors.
 
 ## 4. Set Actions permissions
@@ -57,17 +57,11 @@ The PR page shows them as `CI / lint (pull_request)` and so on, but the check na
   - Private vulnerability reporting: enable it if available, so `SECURITY.md` can point to it.
 - **Done when.** Each toggle is on, or the missing licence is recorded as a known gap.
 
-## 6. First push
+## 6. First push (done by the agents, 20 Oct 2026)
 
-- **Why.** Publishes the reviewed foundations. It happens before the ruleset, because the ruleset blocks direct pushes to `main`.
-- **Where.** On the CTO's machine, after reviewing the mandatory-review paths line by line (re-plan §3.3: `.github/workflows`, `infra/`, the GitHub OIDC trust policy, `CLAUDE.md`, `pyproject.toml`, `uv.lock`):
-
-  ```sh
-  git remote add origin git@github.com:Globalsat-Group/airtimesat-platform.git
-  git push -u origin main
-  ```
-
-- **Done when.** The push succeeded and the `CI` run on `main` shows all seven jobs green under Actions.
+- **What happened.** `main` holds only a placeholder commit (a one-line README), so the rulesets can be set before any reviewed code lands. The foundations are on the branch `claude/repo-foundations`.
+- **What the CTO does.** Open the foundations pull request from `claude/repo-foundations` into `main`, and do not merge it yet. Opening it changes nothing on `main`, and its `CI` run lets GitHub Actions report the seven checks, so step 7 can name GitHub Actions as their source (GitHub offers an app as the source only after it has recently reported a check). It is reviewed and merged in step 8, after the rulesets.
+- **Done when.** The foundations PR is open and its `CI` run has finished.
 
 ## 7. Add the branch ruleset on `main`
 
@@ -86,14 +80,26 @@ The PR page shows them as `CI / lint (pull_request)` and so on, but the check na
     - Require branches to be up to date before merging: on.
     - Add the seven checks from the table above: `lint`, `typecheck`, `contracts`, `tests`, `security`, `terraform`, `workflows`. For each, set the source to **GitHub Actions**, so no other app can report a passing check with the same name.
   - Optional: require linear history; require signed commits.
-- **Note.** GitHub does not let authors approve their own PRs. With the CTO as the only Code Owner, a PR opened from the CTO's own account can only merge through the bypass. Agent work comes from the bot (step 9), so this is the exception, not the rule.
-- **Done when.** A direct push to `main` is rejected, and a test PR cannot merge until all seven checks pass and the CTO approves.
+- **Note.** GitHub does not let authors approve their own PRs. With the CTO as the only Code Owner, a PR opened from the CTO's own account can only merge through the bypass; so does the foundations PR (step 8). Agent work comes from the bot (step 9), so this is the exception, not the rule. The bypass also means these rules do not bind the CTO: bypassing them is a deliberate act that GitHub records, not something GitHub prevents.
+- **Done when.** A direct push to `main` is rejected. That a PR cannot merge until all seven checks pass and the CTO approves is tested with the bot's first PR (step 9), because a PR from the CTO's account can never collect that approval.
 
-## 8. Confirm the first PR runs green
+### 7b. Only humans merge: the restrict-updates ruleset
 
-- **Why.** S0 action 3.1 exit criterion.
-- **Where.** Open a small PR (for example filling a `[FILL]` in `SECURITY.md`). Watch Actions.
-- **Done when.** All seven required checks pass on the PR and it merges only after the CTO's approval.
+- **Why.** CTO decision, 20 Oct 2026: only humans merge into `main`. Code Owner review stops the bot from approving its own work, but once the CTO approves, an app with Contents write can still merge through the API. With **Restrict updates**, only this ruleset's bypass actors can update `main`, and a merge is an update (other actors see "The base branch does not allow updates" on the PR).
+- **Where.** Repository → Settings → Rules → Rulesets → New ruleset → New branch ruleset.
+  - Name `main-humans-merge`. Enforcement status **Active**. Target branches: include the default branch.
+  - Rules: **Restrict updates** on. Nothing else. The rules of both rulesets apply to `main` and bypass is granted per ruleset, so this ruleset's bypass does not skip the review and check rules of step 7.
+  - Bypass list: only the **Repository admin** role (organization owners included, step 2), or the CTO's own user, which repository rulesets accept since May 2026. A deputy made admin later is also a human. No app, no bot, no team.
+  - Bypass mode: **Exempt** if GitHub offers it, otherwise **For pull requests only**. With For pull requests only, GitHub shows every merge as blocked and the CTO must tick the box to merge without waiting for requirements (bypass). The CTO is also a bypass actor of the `main` ruleset, so that same box would let through a PR with a red check or no approval, and ticking it on every merge hides that difference. An exempt actor merges with the normal button and stays bound by the `main` ruleset unless they choose to bypass it. Either way the `main` ruleset still rejects the CTO's direct pushes. Verify all of this in GitHub with the test below.
+- **And.** Repository → Settings → General → Pull Requests: turn **Allow auto-merge** off, so every merge is a human pressing the button at that moment.
+- **Limit.** GitHub sees the account behind a token, not who is using it. An agent session whose GitHub access acts as the CTO's account holds the CTO's bypass, and no ruleset can stop it. On 20 Oct 2026 the GitHub tools in Claude Code sessions authenticated as `imtgsat`. CLAUDE.md forbids agents to merge; whether to also take merge rights away from that access is a CTO decision.
+- **Done when** (needs the bot of step 9). A bot PR with all seven checks green and the CTO's approval cannot be merged by the bot, and the CTO can merge it. Note whether the CTO's merge needed the bypass box: if it did, every merge is a bypass, so check the seven checks and the approval yourself before ticking it.
+
+## 8. Review and merge the foundations PR (the first PR)
+
+- **Why.** S0 action 3.1 exit criterion: CI green on the first PR. It also puts the reviewed foundations, CODEOWNERS included, on `main`.
+- **Where.** The PR opened in step 6. Review it line by line on every mandatory-review path in `CLAUDE.md` (Review rules) and the PR template. It comes from the CTO's account (the bot of step 9 does not exist yet), so GitHub will not let the CTO approve it, and it can only merge through the step-7 bypass. Use the bypass only when all seven checks are green.
+- **Done when.** All seven required checks pass on the PR, the CTO has merged it, and the `CI` run on `main` shows all seven jobs green under Actions.
 
 ## 9. Create the bot identity for agent PRs
 
@@ -105,7 +111,7 @@ The PR page shows them as `CI / lint (pull_request)` and so on, but the check na
   - Install it with **Only select repositories** → `airtimesat-platform`.
   - Generate the private key and store it in Keeper. It never goes into this repository, an agent session or a CI secret.
   - Without the Workflows permission, the bot cannot push changes under `.github/workflows/`; the CTO commits those, or grants that permission later as a recorded decision.
-- **Done when.** A test PR opened by the bot shows the author as `<app-name>[bot]`, cannot merge without the CTO's approval, and the bot is in no bypass list.
+- **Done when.** A test PR opened by the bot shows the author as `<app-name>[bot]`, cannot merge until all seven checks pass and the CTO approves (step 7), cannot be merged by the bot even after that approval (step 7b), and the bot is in no bypass list.
 
 ## 10. Later steps (not needed for S0)
 
@@ -127,5 +133,5 @@ The PR page shows them as `CI / lint (pull_request)` and so on, but the check na
 ### Internal deputy
 
 - **Why.** Re-plan §8.5: an internal deputy with read access to the repositories and second-admin rights on GitHub.
-- **Where.** When the deputy is named: add them to the repository (Read, or Admin as second admin, as the CTO decides; Admin also holds the ruleset bypass of step 7). Keep the mandatory-review paths in `.github/CODEOWNERS` with the CTO.
+- **Where.** When the deputy is named: add them to the repository (Read, or Admin as second admin, as the CTO decides; Admin also holds the ruleset bypasses of steps 7 and 7b). Keep the mandatory-review paths in `.github/CODEOWNERS` with the CTO.
 - **Done when.** The deputy can read the repository and the runbooks, and CODEOWNERS still routes the mandatory-review paths to the CTO.

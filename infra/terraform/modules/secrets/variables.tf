@@ -19,7 +19,7 @@ variable "environments" {
 }
 
 variable "reader_role_arns" {
-  description = "IAM role ARNs allowed to read each environment's secret, keyed by environment. Only the gateway role (and the masker for SITEST) belongs here. An environment with no entry cannot be read by anyone."
+  description = "IAM role ARNs allowed to read each environment's secret, keyed by environment. Only the gateway role belongs here, plus the masker role under sitest only (CTO decision, 20 Oct 2026). An environment with no entry cannot be read by anyone."
   type        = map(list(string))
   default     = {}
 }

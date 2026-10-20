@@ -8,3 +8,7 @@ create_github_oidc_provider = true # false if the landing zone already has it
 
 enable_archive_bucket  = false # [FILL: G0 memo decision]
 archive_retention_days = null  # [FILL: days, from Legal, when the archive is enabled]
+
+# [FILL before the first apply: break-glass role ARN, plus the deploy role if Terraform must
+# later change the archive policy or retention. Empty = only the account root user.]
+archive_governance_admin_role_arns = []

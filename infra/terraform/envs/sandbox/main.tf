@@ -72,4 +72,6 @@ module "archive_bucket" {
   bucket_name    = "${local.name}-tap-archive-${data.aws_caller_identity.current.account_id}"
   retention_days = var.archive_retention_days
   kms_key_arn    = module.kms_archive[0].key_arn
+
+  governance_admin_role_arns = var.archive_governance_admin_role_arns
 }

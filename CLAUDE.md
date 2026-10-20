@@ -17,8 +17,9 @@ Plans and decisions live in `Globalsat-Group/IWS`. This repository holds code, t
 
 ## Live-system boundary (re-plan §3.4)
 
-- Never call IWS production or Beta. SITEST, through the masker, is the only IWS environment agents reach. Every production call and every call to Iridium's SFTP is made by the CTO.
-- Never hold, request, print or store a raw credential. Only the gateway role (and, for SITEST, the masker) reads an IWS secret, from Secrets Manager.
+- Never call IWS production or Beta (Beta is CTO-only, like production; confirmed by the CTO on 20 Oct 2026). SITEST, through the masker, is the only IWS environment agents reach. Every production call and every call to Iridium's SFTP is made by the CTO.
+- The development credential covers both SITEST and Beta. The masker and any agent-facing tool call the SITEST endpoint only; a Beta endpoint in agent-reachable code or config is a defect.
+- Never hold, request, print or store a raw credential. Only the gateway role (and, for SITEST only, the masker) reads an IWS secret, from Secrets Manager (agreed by the CTO on 20 Oct 2026).
 - Reach SITEST only through the recorder and masker. SITEST is refreshed from production, so it is production personal data.
 - Read calls through the masker are fine. Writes go only to assigned test inventory, inside a test plan the CTO approved.
 - DEACTIVE stays with the CTO. Never run it, script it or put it in a test plan.
@@ -45,12 +46,14 @@ Plans and decisions live in `Globalsat-Group/IWS`. This repository holds code, t
   - `src/airtimesat_platform/masker/`, its tests and the leak tests (any `*mask*` or `*leak*` file)
   - `src/airtimesat_platform/common/secrets*` and any `*secret*` file (secrets handling)
   - `infra/` and any `*iam*` or `*oidc*` file (Terraform, IAM, GitHub OIDC trust policy)
-  - `.github/` (workflows)
+  - `.github/` (workflows, CODEOWNERS, Dependabot, PR template)
   - `Dockerfile*`
   - `CLAUDE.md`, `pyproject.toml`, `uv.lock`
+  - Gate configuration: `Makefile`, `.gitleaks.toml`, `.gitignore`, `.pre-commit-config.yaml`, `licensing/`, `scripts/licence_gate.py`, `tests/test_import_contracts.py`, `SECURITY.md`
 - Other code: tests must pass and the CTO reads the diff.
 - The CTO merges only code they can explain. Keep PRs small enough to explain.
-- Agent PRs come from the bot identity, never from the CTO's account. Agents never approve, merge or bypass a PR: the CTO approves and merges.
+- Agent PRs come from the bot identity, never from the CTO's account.
+- **Only humans merge** (CTO decision, 20 Oct 2026). Agents and the bot never approve, merge, enable auto-merge or bypass a PR. GitHub stops the bot from merging with the restrict-updates ruleset (`docs/SETUP_CHECKLIST.md`, step 7b). It cannot stop an agent that reaches GitHub through a human's account, so this rule binds agents whatever access they hold.
 - Never weaken a gate to get green: no skipped tests, no new lint ignores, no checkov skips, no licence exceptions and no gitleaks allow-list entries without a written reason in the same PR.
 
 ## Checks
