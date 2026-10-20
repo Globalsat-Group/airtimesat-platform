@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# uv / virtual environments (uv.lock is committed)
+.venv/
+venv/
+
+# Tool caches and reports
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.import_linter_cache/
+results.sarif
+
+# Terraform (.terraform.lock.hcl is committed)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+
+# Local environment and secrets: never committed
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+.aws/
+
+# Confidential material: never in this repository (CLAUDE.md, Confidentiality)
+# Iridium PDFs and guides stay in Globalsat-Group/IWS.
+*.pdf
+# Raw SITEST or production captures; only masked fixtures may be committed.
+recordings/
+captures/
+# TAP files.
+*.tap
+*.TAP
+
+# Editors and OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db

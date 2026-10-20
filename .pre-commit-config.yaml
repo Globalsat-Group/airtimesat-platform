@@ -1,0 +1,22 @@
+# Optional local hooks (install with `uvx pre-commit install`). CI does not
+# depend on them: `make check` and the CI jobs are the gate.
+# ruff runs from the project environment, so its version is the one in uv.lock.
+# gitleaks is pinned to the same version CI uses (8.21.2), by commit SHA.
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --force-exclude
+        language: system
+        types_or: [python, pyi]
+      - id: ruff-format
+        name: ruff format --check
+        entry: uv run ruff format --check --force-exclude
+        language: system
+        types_or: [python, pyi]
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: 43fae355e6fe4d99d2a7b240a224b85e2903aeb4 # v8.21.2
+    hooks:
+      - id: gitleaks

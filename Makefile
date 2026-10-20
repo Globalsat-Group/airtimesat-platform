@@ -1,0 +1,80 @@
+# One local entry point for every check. CI calls the same targets by name.
+# Tools come from PATH: uv, gitleaks, terraform, checkov, actionlint.
+# Python tools run through uv from the locked environment.
+
+SHELL := /bin/bash
+.SHELLFLAGS := -eu -o pipefail -c
+.DEFAULT_GOAL := help
+
+UV_RUN := uv run --locked
+TF_DIR := infra/terraform
+TF_ENV := $(TF_DIR)/envs/sandbox
+
+# checkov exits 0 when it cannot parse a file, and then checks nothing in it. Keep its exit
+# code, and also fail unless at least one check passed and no file failed to parse.
+CHECKOV = run_checkov() { rc=0; out="$$(checkov "$$@" --quiet --compact)" || rc=$$?; \
+	printf '%s\n' "$$out"; [ "$$rc" -eq 0 ] || return "$$rc"; \
+	if ! grep -q 'Passed checks: [1-9]' <<<"$$out" || grep -q 'Parsing errors' <<<"$$out"; then \
+	echo "checkov: no checks ran or a file did not parse" >&2; return 1; fi; }; run_checkov
+
+# Triggers that run with the main branch's token and OIDC subject but can be fired by a pull
+# request or a comment.
+BANNED_TRIGGERS := pull_request_target|workflow_run|issue_comment
+
+.PHONY: help sync lint format typecheck contracts test security gitleaks audit licences \
+	terraform workflows check run
+
+help: ## List targets
+	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-11s %s\n", $$1, $$2}'
+
+sync: ## Install the locked environment (.venv)
+	uv sync --locked
+
+lint: ## ruff check and ruff format --check
+	$(UV_RUN) ruff check .
+	$(UV_RUN) ruff format --check .
+
+format: ## Apply ruff fixes and formatting (local use only)
+	$(UV_RUN) ruff check --fix .
+	$(UV_RUN) ruff format .
+
+typecheck: ## pyright in strict mode
+	$(UV_RUN) pyright
+
+contracts: ## import-linter module boundaries
+	$(UV_RUN) lint-imports
+
+test: ## pytest with coverage
+	$(UV_RUN) pytest
+
+security: gitleaks audit licences ## gitleaks, pip-audit and the licence gate
+
+gitleaks: ## Scan the working tree for secrets
+	gitleaks dir . --redact --no-banner --verbose
+
+audit: ## pip-audit over every locked dependency, dev group included
+	@req="$$(mktemp)"; trap 'rm -f "$$req"' EXIT; \
+	uv export --locked --all-groups --no-emit-project --format requirements-txt --quiet -o "$$req"; \
+	$(UV_RUN) pip-audit --strict --progress-spinner off --disable-pip --require-hashes -r "$$req"
+
+licences: ## Licence gate (licensing/allowlist.toml, licensing/exceptions.toml)
+	$(UV_RUN) python scripts/licence_gate.py
+
+terraform: ## terraform fmt, init -backend=false + validate (sandbox), checkov
+	terraform fmt -check -recursive $(TF_DIR)
+	terraform -chdir=$(TF_ENV) init -backend=false -input=false -lockfile=readonly
+	terraform -chdir=$(TF_ENV) validate
+	@echo "checkov --directory $(TF_DIR) --framework terraform"
+	@$(CHECKOV) --directory $(TF_DIR) --framework terraform
+
+workflows: ## actionlint, banned-trigger check and checkov over .github/workflows
+	actionlint
+	@if grep -rnwE '$(BANNED_TRIGGERS)' .github/workflows; then \
+		echo "workflows: $(BANNED_TRIGGERS) are not allowed (docs/SETUP_CHECKLIST.md)" >&2; exit 1; fi
+	@echo "checkov --directory .github/workflows --framework github_actions"
+	@$(CHECKOV) --directory .github/workflows --framework github_actions
+
+check: lint typecheck contracts test security terraform workflows ## Everything CI runs
+
+run: ## Start the console locally on http://127.0.0.1:8000
+	$(UV_RUN) uvicorn --factory airtimesat_platform.console.app:create_app --host 127.0.0.1 --port 8000

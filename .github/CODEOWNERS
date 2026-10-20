@@ -1,0 +1,48 @@
+# Code owners. With "Require review from Code Owners" on main, every PR needs
+# the owner's approval. GitHub reads this file from a PR's base branch, so it
+# applies once it is on main. Confirm the handle before the foundations PR
+# merges (docs/SETUP_CHECKLIST.md, step 3).
+#
+# Later lines win. The default owner is listed first; the paths below are the
+# mandatory line-by-line review list of re-plan §3.3. They name the same owner
+# today on purpose: when more people get access, these paths must stay with the
+# CTO even if the default changes.
+
+# Default owner
+*                                         @imtgsat
+
+# Mandatory line-by-line CTO review (re-plan §3.3)
+# Gateway: signing, permits, operation registry, any code that writes to IWS
+/src/airtimesat_platform/gateway/         @imtgsat
+# Recorder and masker: the only path from agents to SITEST. Its tests and the
+# leak tests live outside the package, so they are matched by name (re-plan §3.4).
+/src/airtimesat_platform/masker/          @imtgsat
+**/*mask*                                 @imtgsat
+**/*leak*                                 @imtgsat
+# Secrets handling, wherever it lives
+/src/airtimesat_platform/common/secrets*  @imtgsat
+**/*secret*                               @imtgsat
+# Terraform and IAM policies
+/infra/                                   @imtgsat
+**/*iam*                                  @imtgsat
+# GitHub OIDC trust policy
+**/*oidc*                                 @imtgsat
+# CI workflows, CODEOWNERS, Dependabot, PR template
+/.github/                                 @imtgsat
+# Container images
+Dockerfile*                               @imtgsat
+# Agent rules
+/CLAUDE.md                                @imtgsat
+# Dependencies and tool configuration, including the import-linter contracts ([tool.importlinter])
+/pyproject.toml                           @imtgsat
+/uv.lock                                  @imtgsat
+
+# Gate configuration: a change here can weaken a CI gate
+/Makefile                                 @imtgsat
+/licensing/                               @imtgsat
+/scripts/licence_gate.py                  @imtgsat
+/.gitleaks.toml                           @imtgsat
+/.gitignore                               @imtgsat
+/.pre-commit-config.yaml                  @imtgsat
+/tests/test_import_contracts.py           @imtgsat
+/SECURITY.md                              @imtgsat

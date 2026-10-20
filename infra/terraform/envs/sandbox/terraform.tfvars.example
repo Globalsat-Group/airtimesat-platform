@@ -1,0 +1,14 @@
+# Copy to terraform.tfvars (git-ignored) and fill. Never put secret values here.
+region                   = "[FILL: us-east-1 | us-east-2 | sa-east-1, after ST-15]"
+alert_emails             = ["[FILL: shared mailbox]", "[FILL: deputy]"]
+budget_monthly_limit_usd = 0 # [FILL: CTO decision; run cost is open]
+
+iws_credential_environments = ["sitest"]
+create_github_oidc_provider = true # false if the landing zone already has it
+
+enable_archive_bucket  = false # [FILL: G0 memo decision]
+archive_retention_days = null  # [FILL: days, from Legal, when the archive is enabled]
+
+# [FILL before the first apply: break-glass role ARN, plus the deploy role if Terraform must
+# later change the archive policy or retention. Empty = only the account root user.]
+archive_governance_admin_role_arns = []

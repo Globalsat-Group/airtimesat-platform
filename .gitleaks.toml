@@ -1,0 +1,27 @@
+# gitleaks configuration: the default rule set, plus an allow-list for paths
+# that are generated locally and never committed (see .gitignore). `make security`
+# scans the working tree with `gitleaks dir`, which does not read .gitignore, so
+# without this list it would scan third-party code in .venv and .terraform.
+# The CI history scan (`gitleaks git`) uses the same list, so each path is
+# anchored to where the tool creates it: a committed file in a directory that
+# merely has the same name elsewhere is still scanned.
+#
+# Do not allow-list real files to silence a finding: remove the secret and
+# rotate it. Synthetic test placeholders, if ever needed, go in a narrow
+# `regexes` entry below with a comment that says why.
+title = "airtimesat-platform"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Local, generated and third-party paths that are never committed"
+paths = [
+  '''^\.git/''',
+  '''^\.venv/''',
+  '''^infra/terraform/(envs|modules)/[^/]+/\.terraform/''',
+  '''^\.(ruff|pytest|mypy)_cache/''',
+  '''^\.pyright/''',
+  '''^htmlcov/''',
+  '''(^|/)__pycache__/[^/]+\.pyc$''',
+]
