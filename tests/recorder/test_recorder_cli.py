@@ -109,7 +109,16 @@ def test_the_refusal_line_format(run: Run) -> None:
 
 @pytest.mark.parametrize(
     "argv",
-    [[], ["check"], ["run", "plan.yaml"], ["inventory", "add"], ["keys", "init"], ["--verbose"]],
+    [
+        [],
+        ["check"],
+        ["run"],
+        ["keys"],
+        ["incident", "clear"],
+        ["incident", "clear", "x"],
+        ["inventory", "add"],
+        ["--verbose"],
+    ],
 )
 def test_usage_errors_exit_two(argv: list[str], capsys: pytest.CaptureFixture[str]) -> None:
     assert main(argv, field_map_source=lambda: None) == 2

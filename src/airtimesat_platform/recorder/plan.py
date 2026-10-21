@@ -33,9 +33,12 @@ YAML formatting changes and changes with anything the recorder would send.
 Nothing here prints or returns a plan value except through ``Plan`` itself.
 """
 
+import errno
 import hashlib
 import json
+import os
 import re
+import stat
 import unicodedata
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
@@ -174,6 +177,38 @@ class FieldMapContext:
         shown = "/".join(s if s in self.segments else "?" for s in path.split("/") if s)
         location = f"{where}/{shown}" if shown else where
         return f"{location}#{detector}" if detector else location
+
+
+def read_plan_file(path: str) -> str:
+    """Read a plan: a regular file that is not itself a symlink, at most ``MAX_PLAN_BYTES``.
+
+    A symlink would make CI judge a file outside ``recording-plans/`` that a later pull
+    request can change unseen, and a FIFO or a device could stall or flood the check.
+    ``O_NOFOLLOW`` guards only the last path component; the ``recorder-check`` CI job and
+    ``make plans`` refuse a ``recording-plans`` that is not a plain directory.
+    """
+    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | getattr(os, "O_CLOEXEC", 0)
+    try:
+        fd = os.open(path, flags)
+    except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            raise PlanRefusedError("PLAN_NOT_REGULAR_FILE") from None
+        raise PlanRefusedError("PLAN_UNREADABLE") from None
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise PlanRefusedError("PLAN_NOT_REGULAR_FILE")
+        with os.fdopen(fd, "rb", closefd=False) as handle:
+            data = handle.read(MAX_PLAN_BYTES + 1)
+    except OSError:
+        raise PlanRefusedError("PLAN_UNREADABLE") from None
+    finally:
+        os.close(fd)
+    if len(data) > MAX_PLAN_BYTES:
+        raise PlanRefusedError("PLAN_TOO_LARGE")
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        raise PlanRefusedError("PLAN_NOT_UTF8") from None
 
 
 # ---------------------------------------------------------------- typed helpers

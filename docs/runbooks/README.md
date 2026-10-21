@@ -13,11 +13,11 @@ These files steer the CTO's manual IWS calls, so they are on the line-by-line re
 
 | File | What | When |
 |---|---|---|
-| [`03_trusted_machine_setup.md`](03_trusted_machine_setup.md) | The trusted machine, Keeper, the backup key, the before-each-run check | First (Part A); Part B before the first recording; Part C before every run or manual call |
+| [`03_trusted_machine_setup.md`](03_trusted_machine_setup.md) | The trusted machine, Keeper, the backup key, the before-each-run check | First (Part A); Parts B and D before the first recording; Part C before every run or manual call |
 | [`01_wsdl_harvest_and_sitest_record.md`](01_wsdl_harvest_and_sitest_record.md) | Harvest both SITEST WSDLs, record SITEST's address and certificate, look up Beta by DNS only, check Python's TLS trust, commit the snapshot | The first live step (design §10.2 step 1) |
 | [`sitest_endpoint_record.md`](sitest_endpoint_record.md) | Template for the SITEST facts kept in git | Filled in by `01` |
 | [`02_pin_sitest_address.md`](02_pin_sitest_address.md) | Pin the SITEST address; re-pin when SITEST moves | After `01` |
-| `04_recording_session.md` | Reserved for the recording session | Arrives with PR D2 |
+| [`04_recording_session.md`](04_recording_session.md) | A recording session: secrets on standard input, dry run, live run, the masked output and manifest, the PR, the backup | For each merged plan you run, after `03` Part C |
 | [`05_manual_deactive.md`](05_manual_deactive.md) | Your manual DEACTIVE | Only when your own test plan needs it |
 | [`06_incidents.md`](06_incidents.md) | Refusals, leaks, compromise, a bad merge, a wrong-environment call | When needed |
 
@@ -34,5 +34,4 @@ These files steer the CTO's manual IWS calls, so they are on the line-by-line re
 
 ## Later
 
-- PR D2: `04_recording_session.md`, `recorder keys init`, the recorder configuration and the exact secrets command (`03` Part D).
 - PR D3: `recorder note`, which replaces the log entry of `05` step 6.
