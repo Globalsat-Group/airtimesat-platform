@@ -1,7 +1,16 @@
 """The recorder's command line: ``python -m airtimesat_platform.recorder`` (design §5.1).
 
-Only ``check`` exists in this stage (S2 PR D1). ``run``, ``inventory add``, ``note``,
-``incident clear``, ``backup`` and ``keys init`` arrive in D2 and D3.
+Commands (``inventory add`` and ``note`` arrive in S2 PR D3):
+
+- ``recorder check <plan>...``: see below.
+- ``recorder run <plan> [--dry-run]``: run a reviewed plan's reads, or dry-run it (``run``).
+- ``recorder keys init``: write four new masking keys to standard output for Keeper (``admin``).
+- ``recorder backup``: write an age-encrypted vault backup (``admin``).
+- ``recorder incident clear <id>``: re-enable the method an incident blocked (``admin``).
+
+``run``, ``backup`` and ``incident clear`` read the configuration (``config``, ``--config``)
+and run only on the trusted machine. Every command exits 0 on success, 1 when refused or
+stopped, and 2 on a usage error, and prints codes, never a value.
 
 ``recorder check <plan>...`` needs no secret, no vault and no network, so it also runs in CI
 and in agent sessions. It prints one line per plan:
@@ -15,28 +24,25 @@ plan might hold a real identifier. An uncaught exception prints its type and cod
 """
 
 import argparse
-import errno
-import os
-import stat
 import sys
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Final, TextIO
 
 from airtimesat_platform.gateway.sitest_port import generated_field_map_text
 from airtimesat_platform.masker.errors import MaskingError, safe_path
 from airtimesat_platform.masker.fieldmap.loader import build_field_map, packaged_overrides
 from airtimesat_platform.masker.logsafe import install_excepthook
+from airtimesat_platform.recorder import admin
+from airtimesat_platform.recorder.config import load_config
 from airtimesat_platform.recorder.errors import PlanRefusedError
-from airtimesat_platform.recorder.plan import MAX_PLAN_BYTES, FieldMapContext, check_plan
+from airtimesat_platform.recorder.plan import FieldMapContext, check_plan, read_plan_file
+from airtimesat_platform.recorder.run import FieldMapSource, run_plan
 
 EXIT_OK: Final = 0
 EXIT_REFUSED: Final = 1
 EXIT_USAGE: Final = 2
-
-# Returns the generated field map's text and the overrides' text, or None while the
-# generated map does not exist (until the WSDL harvest, PR W).
-FieldMapSource = Callable[[], tuple[str, str] | None]
 
 
 def packaged_field_map() -> tuple[str, str] | None:
@@ -68,39 +74,22 @@ def _parser() -> argparse.ArgumentParser:
         description="Check recording plans. Exit 0: all valid; 1: any refused; 2: usage.",
     )
     check.add_argument("plans", nargs="+", metavar="plan", help="a recording plan file")
+    run = commands.add_parser("run", help="run a reviewed plan's reads (trusted machine)")
+    run.add_argument("plan", help="the recording plan file")
+    run.add_argument("--dry-run", action="store_true", help="check and show; never call IWS")
+    keys = commands.add_parser("keys", help="masking keys").add_subparsers(
+        dest="action", required=True
+    )
+    keys.add_parser("init", help="write four new keys to standard output for Keeper")
+    backup = commands.add_parser("backup", help="write an age-encrypted vault backup")
+    incident = commands.add_parser("incident", help="incidents").add_subparsers(
+        dest="action", required=True
+    )
+    clear = incident.add_parser("clear", help="re-enable the method an incident blocked")
+    clear.add_argument("id", type=int, help="the incident id")
+    for command in (run, backup, clear):
+        command.add_argument("--config", type=Path, help="configuration file")
     return parser
-
-
-def _read(path: str) -> str:
-    """Read a plan: a regular file that is not itself a symlink, at most ``MAX_PLAN_BYTES``.
-
-    A symlink would make CI judge a file outside ``recording-plans/`` that a later pull
-    request can change unseen, and a FIFO or a device could stall or flood the check.
-    ``O_NOFOLLOW`` guards only the last path component; the ``recorder-check`` CI job and
-    ``make plans`` refuse a ``recording-plans`` that is not a plain directory.
-    """
-    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | getattr(os, "O_CLOEXEC", 0)
-    try:
-        fd = os.open(path, flags)
-    except OSError as exc:
-        if exc.errno == errno.ELOOP:
-            raise PlanRefusedError("PLAN_NOT_REGULAR_FILE") from None
-        raise PlanRefusedError("PLAN_UNREADABLE") from None
-    try:
-        if not stat.S_ISREG(os.fstat(fd).st_mode):
-            raise PlanRefusedError("PLAN_NOT_REGULAR_FILE")
-        with os.fdopen(fd, "rb", closefd=False) as handle:
-            data = handle.read(MAX_PLAN_BYTES + 1)
-    except OSError:
-        raise PlanRefusedError("PLAN_UNREADABLE") from None
-    finally:
-        os.close(fd)
-    if len(data) > MAX_PLAN_BYTES:
-        raise PlanRefusedError("PLAN_TOO_LARGE")
-    try:
-        return data.decode("utf-8")
-    except UnicodeDecodeError:
-        raise PlanRefusedError("PLAN_NOT_UTF8") from None
 
 
 def _field_map(source: FieldMapSource) -> tuple[FieldMapContext | None, str]:
@@ -128,7 +117,9 @@ def check(
     status = EXIT_OK
     for path in paths:
         try:
-            checked = check_plan(_read(path), now=now, field_map=context, field_map_refusal=refusal)
+            checked = check_plan(
+                read_plan_file(path), now=now, field_map=context, field_map_refusal=refusal
+            )
         except PlanRefusedError as exc:
             line = f"REFUSED {_shown_path(path)} {exc.code} {exc.location}".rstrip()
             status = EXIT_REFUSED
@@ -154,13 +145,36 @@ def main(
         args = _parser().parse_args(argv)
     except SystemExit as exc:
         return exc.code if isinstance(exc.code, int) else EXIT_USAGE
-    plans: list[str] = args.plans
-    return check(
-        plans,
-        out=out if out is not None else sys.stdout,
-        now=now(),
-        field_map_source=field_map_source,
-    )
+    stream = out if out is not None else sys.stdout
+    command: str = args.command
+    if command == "check":
+        plans: list[str] = args.plans
+        return check(plans, out=stream, now=now(), field_map_source=field_map_source)
+    try:
+        if command == "keys":
+            admin.keys_init(stream)
+            return EXIT_OK
+        config = load_config(args.config)
+        if command == "run":
+            return run_plan(
+                Path(args.plan),
+                config=config,
+                dry_run=args.dry_run,
+                out=stream,
+                field_map_source=field_map_source,
+                now=now,
+            )
+        if command == "backup":
+            path, pruned = admin.backup(config, now())
+            stream.write(f"BACKUP_WRITTEN {path.name} pruned={pruned}\n")
+            stream.write("Attach this file to the Keeper record (runbook 04).\n")
+            return EXIT_OK
+        operation = admin.incident_clear(config, args.id, now())
+        stream.write(f"INCIDENT_CLEARED {args.id} operation={operation or '-'}\n")
+        return EXIT_OK
+    except PlanRefusedError as exc:
+        stream.write(f"REFUSED {exc.code} {exc.location}".rstrip() + "\n")
+        return EXIT_REFUSED
 
 
 if __name__ == "__main__":

@@ -80,12 +80,27 @@ paths:
   - {operation: getIwsRequests, direction: request, path: request/endDate, xsd_type: string, min_occurs: 0}
   - {operation: getIwsRequests, direction: request, path: request/Limit, xsd_type: int, min_occurs: 0}
   - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse, xsd_type: complex}
+  - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse/iwsLog, xsd_type: complex, min_occurs: 0, max_occurs: unbounded}
+  - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse/iwsLog/requestId, xsd_type: string}
+  - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse/iwsLog/requestedOperation, xsd_type: string}
+  - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse/iwsLog/caller, xsd_type: string, min_occurs: 0}
+  # getIwsRequest (one entry, by an id the run log maps to a recorder call)
+  - {operation: getIwsRequest, direction: request, path: request, xsd_type: complex}
+  - {operation: getIwsRequest, direction: request, path: request/requestId, xsd_type: string}
+  - {operation: getIwsRequest, direction: response, path: getIwsRequestResponse, xsd_type: complex}
+  - {operation: getIwsRequest, direction: response, path: getIwsRequestResponse/iwsLog, xsd_type: complex, min_occurs: 0}
+  - {operation: getIwsRequest, direction: response, path: getIwsRequestResponse/iwsLog/requestId, xsd_type: string}
+  - {operation: getIwsRequest, direction: response, path: getIwsRequestResponse/iwsLog/caller, xsd_type: string, min_occurs: 0}
   # getQueueEntries
   - {operation: getQueueEntries, direction: request, path: request, xsd_type: complex}
   - {operation: getQueueEntries, direction: request, path: request/Endpoint, xsd_type: enum}
   - {operation: getQueueEntries, direction: request, path: request/status, xsd_type: enum}
   - {operation: getQueueEntries, direction: request, path: request/createdBy, xsd_type: string}
   - {operation: getQueueEntries, direction: response, path: getQueueEntriesResponse, xsd_type: complex}
+  # getQueueEntry (refused by the run until W: queue entry ids are their own id space)
+  - {operation: getQueueEntry, direction: request, path: request, xsd_type: complex}
+  - {operation: getQueueEntry, direction: request, path: request/queueEntryId, xsd_type: string}
+  - {operation: getQueueEntry, direction: response, path: getQueueEntryResponse, xsd_type: complex}
   # getSystemStatus (both endpoints) and a reporting read
   - {operation: getSystemStatus, direction: request, path: request, xsd_type: complex}
   - {operation: getSystemStatus, direction: response, path: getSystemStatusResponse, xsd_type: complex}

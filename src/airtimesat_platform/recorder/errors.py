@@ -1,4 +1,4 @@
-"""The refusal ``recorder check`` raises for a plan.
+"""The refusals of the recorder: a plan refused by ``recorder check``, or a command refused.
 
 It carries a code and a location, never a value: CI logs are stored at GitHub, and a plan
 might hold a real identifier (design §8.3, §8.4). A location names a plan field or a call
@@ -26,3 +26,7 @@ class PlanRefusedError(Exception):
     def __repr__(self) -> str:
         """Return the same text as ``str()``."""
         return f"{type(self).__name__}({self})"
+
+
+class RecorderError(PlanRefusedError):
+    """``recorder run``, ``backup`` or ``incident clear`` refused or stopped: a code only."""
