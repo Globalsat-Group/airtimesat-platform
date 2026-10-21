@@ -1,7 +1,9 @@
 """Beta and production stay unreachable from the code (design §7.1 layer 1, §8.5 #9).
 
 This test names no Beta or production host. It allows exactly one Iridium host name under
-``src/``, the SITEST one, and only in ``gateway/endpoints_sitest.py``. The one other allowed
+``src/``, the SITEST one, and only in ``gateway/endpoints_sitest.py`` and in the harvested
+SITEST WSDL snapshot under ``gateway/wsdl/sitest/`` (runbook ``01``), whose addresses and
+imports name SITEST and nothing else. The one other allowed
 string is the IWS XML namespace URI, ``"http://www.iridium.com"``, exactly and in quotes: a
 name, never contacted. Any other host under ``iridium.com``, the bare domain, or a fragment
 such as ``".iridium.com"`` (which could be joined to another name) fails it. In Python files
@@ -23,6 +25,8 @@ SRC = ROOT / "src"
 GATEWAY = SRC / "airtimesat_platform" / "gateway"
 SITEST_HOST = "iwstraining.iridium.com"
 ENDPOINTS_FILE = GATEWAY / "endpoints_sitest.py"
+# The harvested SITEST WSDL snapshot: the WSDLs and XSDs as fetched, never edited.
+WSDL_DIR = GATEWAY / "wsdl" / "sitest"
 
 # The registered domain, however it is split or cased.
 _DOMAIN = re.compile(r"iridium\s*\.\s*com", re.IGNORECASE)
@@ -81,13 +85,27 @@ def test_no_iridium_host_but_sitest_under_src() -> None:
     assert found == {}, f"non-SITEST Iridium host names under src/: {found}"
 
 
-def test_the_sitest_host_is_named_only_in_the_endpoints_module() -> None:
-    naming = sorted(
-        str(path.relative_to(ROOT))
+def _may_name_sitest(path: Path) -> bool:
+    return path == ENDPOINTS_FILE or WSDL_DIR in path.parents
+
+
+def test_the_sitest_host_is_named_only_in_the_endpoints_module_and_the_snapshot() -> None:
+    naming = [
+        path
         for path in _source_files()
         if SITEST_HOST in path.read_text(encoding="utf-8", errors="replace").lower()
-    )
-    assert naming == [str(ENDPOINTS_FILE.relative_to(ROOT))]
+    ]
+    assert ENDPOINTS_FILE in naming
+    outside = sorted(str(path.relative_to(ROOT)) for path in naming if not _may_name_sitest(path))
+    assert outside == []
+
+
+def test_only_the_snapshot_folder_may_name_sitest() -> None:
+    assert _may_name_sitest(WSDL_DIR / "provisioning.wsdl")
+    assert _may_name_sitest(WSDL_DIR / "xsd" / "types.xsd")
+    assert not _may_name_sitest(WSDL_DIR.parent / "other.wsdl")
+    assert not _may_name_sitest(WSDL_DIR.parent / "sitest-copy" / "provisioning.wsdl")
+    assert not _may_name_sitest(GATEWAY / "transport.py")
 
 
 def test_the_check_catches_other_hosts(tmp_path: Path) -> None:

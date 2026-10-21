@@ -1,11 +1,15 @@
-"""Fixtures for the masker and leak tests: fake keys, an in-memory vault, the synthetic map.
+"""Shared fixtures: the network guard, and fake keys, an in-memory vault and the synthetic map.
 
-Every key is an obviously fake constant and every identifier is a canary (design §8.2).
+Every key is an obviously fake constant and every identifier is a canary (design §8.2). The
+network guard lets tests open loopback connections only, so no test can reach SITEST or any
+other host, whatever the pinned address holds (CLAUDE.md: agents never call SITEST).
 """
 
+import ipaddress
+import socket
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -23,6 +27,54 @@ XSI = "http://www.w3.org/2001/XMLSchema-instance"
 # The synthetic SP account number and name the recorder would pass as constants.
 SP_ACCOUNT = "canary-sp-account-1"
 SP_NAME = "Canary SP Name"
+
+
+class NetworkBlockedError(OSError):
+    """A test tried to reach a host other than this machine."""
+
+
+def _local(host: object) -> bool:
+    text = host.decode() if isinstance(host, bytes) else str(host)
+    if text == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(text.split("%", 1)[0]).is_loopback
+    except ValueError:
+        return False
+
+
+def _local_address(address: object) -> bool:
+    # AF_INET and AF_INET6 addresses are tuples; anything else (an AF_UNIX path) is local.
+    if isinstance(address, tuple):
+        host: object = cast(tuple[object, ...], address)[0] if address else None
+        return _local(host)
+    return True
+
+
+@pytest.fixture(autouse=True)
+def _no_network(monkeypatch: pytest.MonkeyPatch) -> None:
+    connect = socket.socket.connect
+    connect_ex = socket.socket.connect_ex
+    getaddrinfo = socket.getaddrinfo
+
+    def guarded_connect(self: socket.socket, address: Any) -> None:
+        if not _local_address(address):
+            raise NetworkBlockedError("tests may connect to loopback addresses only")
+        connect(self, address)
+
+    def guarded_connect_ex(self: socket.socket, address: Any) -> int:
+        if not _local_address(address):
+            raise NetworkBlockedError("tests may connect to loopback addresses only")
+        return connect_ex(self, address)
+
+    def guarded_getaddrinfo(host: Any, *args: Any, **kwargs: Any) -> Any:
+        if host is not None and not _local(host):
+            raise NetworkBlockedError("tests may resolve loopback names only")
+        return getaddrinfo(host, *args, **kwargs)
+
+    monkeypatch.setattr(socket.socket, "connect", guarded_connect)
+    monkeypatch.setattr(socket.socket, "connect_ex", guarded_connect_ex)
+    monkeypatch.setattr(socket, "getaddrinfo", guarded_getaddrinfo)
 
 
 def fake_keys(seed: int = 1) -> MaskingKeys:
