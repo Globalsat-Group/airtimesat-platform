@@ -635,17 +635,27 @@ def test_sigterm_or_sighup_mid_call_takes_the_interrupt_path(
     plan = two_call_plan(h)
     answer_reads(h)
     before = signal.getsignal(number)
+    ignored: list[bool] = []
 
     def deliver(_: str) -> bytes:
         handler = signal.getsignal(number)
         assert callable(handler)
-        handler(number, None)
+        try:
+            handler(number, None)
+        finally:
+            # A second signal (a closing terminal often sends one) must not cut the
+            # clean-up short: from the first one on, both are ignored until the run ends.
+            ignored.append(
+                signal.getsignal(signal.SIGTERM) == signal.SIG_IGN
+                and signal.getsignal(signal.SIGHUP) == signal.SIG_IGN
+            )
         return b""
 
     answer(h, "getSubscriberAccount", deliver)
     with pytest.raises(SystemExit) as info:
         h.run(plan)
     assert info.value.code == 128 + number
+    assert ignored == [True]
     assert signal.getsignal(number) == before
     assert h.staged() == []
     assert h.scanned == []

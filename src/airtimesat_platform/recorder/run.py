@@ -639,7 +639,13 @@ async def _live(runner: _Runner, port: SitestPort) -> None:
 
 
 def _terminate(signum: int, _: object) -> None:
-    """Raise on SIGTERM or SIGHUP, so that the run's abort path cleans up (§5.1 step 6)."""
+    """Raise on SIGTERM or SIGHUP, so that the run's abort path cleans up (§5.1 step 6).
+
+    A closing terminal or a logout often sends a second signal; it is ignored from here on,
+    so it cannot cut the clean-up short. The run restores the previous handlers at the end.
+    """
+    for number in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(number, signal.SIG_IGN)
     raise SystemExit(128 + signum)
 
 
