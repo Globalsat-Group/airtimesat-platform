@@ -1,4 +1,5 @@
-# One local entry point for every check. CI calls the same targets by name.
+# One local entry point for every check. CI calls the same targets by name, except `plans`:
+# CI's recorder-check job judges a pull request's changed plans with the base commit's checker.
 # Tools come from PATH: uv, gitleaks, terraform, checkov, actionlint.
 # Python tools run through uv from the locked environment.
 
@@ -21,7 +22,7 @@ CHECKOV = run_checkov() { rc=0; out="$$(checkov "$$@" --quiet --compact)" || rc=
 # request or a comment.
 BANNED_TRIGGERS := pull_request_target|workflow_run|issue_comment
 
-.PHONY: help sync lint format typecheck contracts test security gitleaks leak-scan audit \
+.PHONY: help sync lint format typecheck contracts test plans security gitleaks leak-scan audit \
 	licences terraform workflows check run
 
 help: ## List targets
@@ -46,6 +47,27 @@ contracts: ## import-linter module boundaries
 
 test: ## pytest with coverage
 	$(UV_RUN) pytest
+
+# CI has no `plans` job: its recorder-check job judges a pull request's changed plans with the
+# base commit's checker. This target judges, with the working tree's checker, the plans that
+# differ from origin/main (committed or not, untracked included), so a merged plan that has
+# expired, or that a later checker refuses, does not fail every later `make check`. Without
+# origin/main it judges every plan. Anything under recording-plans/ that is neither a
+# directory nor a regular file (a symlink, for example) fails.
+plans: ## recorder check over the plans changed against origin/main (passes when there are none)
+	@if [ ! -d recording-plans ]; then echo "plans: no recording plans"; exit 0; fi; \
+	if [ -n "$$(find recording-plans ! -type d ! -type f -print -quit)" ]; then \
+		echo "plans: recording-plans/ may hold only regular files" >&2; exit 1; fi; \
+	list="$$(mktemp)"; trap 'rm -f "$$list"' EXIT; \
+	if base="$$(git merge-base HEAD origin/main 2>/dev/null)"; then \
+		{ git diff -z --name-only --no-renames --diff-filter=d "$$base" -- recording-plans/; \
+			git ls-files -z --others --exclude-standard -- recording-plans/; } \
+			| sort -zu > "$$list"; \
+	else \
+		find recording-plans ! -type d -print0 | sort -z > "$$list"; \
+	fi; \
+	if [ ! -s "$$list" ]; then echo "plans: no changed recording plans"; \
+	else xargs -0 $(UV_RUN) python -m airtimesat_platform.recorder check -- < "$$list"; fi
 
 security: gitleaks leak-scan audit licences ## gitleaks, leak scan, pip-audit and the licence gate
 
@@ -77,7 +99,7 @@ workflows: ## actionlint, banned-trigger check and checkov over .github/workflow
 	@echo "checkov --directory .github/workflows --framework github_actions"
 	@$(CHECKOV) --directory .github/workflows --framework github_actions
 
-check: lint typecheck contracts test security terraform workflows ## Everything CI runs
+check: lint typecheck contracts test plans security terraform workflows ## Every CI check (plans: see above)
 
 run: ## Start the console locally on http://127.0.0.1:8000
 	$(UV_RUN) uvicorn --factory airtimesat_platform.console.app:create_app --host 127.0.0.1 --port 8000

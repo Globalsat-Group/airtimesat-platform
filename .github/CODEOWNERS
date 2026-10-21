@@ -12,8 +12,10 @@
 *                                         @imtgsat
 
 # Mandatory line-by-line CTO review (re-plan §3.3)
-# Gateway: signing, permits, operation registry, any code that writes to IWS
+# Gateway: signing, permits, operation registry, any code that writes to IWS, and its
+# tests (the guard's and the signer's red-team cases)
 /src/airtimesat_platform/gateway/         @imtgsat
+/tests/gateway/                           @imtgsat
 # Masker: the masking engine for SITEST data. Its tests, the leak tests and the
 # masked fixtures live outside the package, so they are matched by name (re-plan §3.4).
 /src/airtimesat_platform/masker/          @imtgsat

@@ -42,7 +42,7 @@ Plans and decisions live in `Globalsat-Group/IWS`. This repository holds code, t
 ## Review rules (re-plan §3.3)
 
 - These paths need the CTO's line-by-line review before merge (CODEOWNERS enforces it):
-  - `src/airtimesat_platform/gateway/` (signing, permits), and any other code that writes to IWS, wherever it lives
+  - `src/airtimesat_platform/gateway/` (signing, permits) and `tests/gateway/`, and any other code that writes to IWS, wherever it lives
   - `src/airtimesat_platform/masker/`, its tests and the leak tests (any `*mask*` or `*leak*` file)
   - `src/airtimesat_platform/recorder/`, `tests/recorder/` and `recording-plans/` (the recorder writes to IWS; every plan is a live-call request)
   - `docs/runbooks/` (they steer the CTO's manual IWS calls)
@@ -60,7 +60,7 @@ Plans and decisions live in `Globalsat-Group/IWS`. This repository holds code, t
 
 ## Checks
 
-- Run `make check` before every PR. It runs lint, typecheck, contracts, test, security, terraform and workflows, the same targets CI runs.
+- Run `make check` before every PR. It runs lint, typecheck, contracts, test, plans, security, terraform and workflows. CI runs the same targets, except `plans`: its `recorder-check` job judges a PR's changed recording plans with the checker from the PR's base commit.
 - Never apply Terraform. Plans and applies are the CTO's.
 - Pin every third-party GitHub Action to a full commit SHA with the version in a comment.
 

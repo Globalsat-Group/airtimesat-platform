@@ -33,6 +33,7 @@ from airtimesat_platform.gateway.sitest_port import (
     SitestPort,
     SitestResult,
     check_clock,
+    generated_field_map_text,
 )
 from airtimesat_platform.gateway.transport import TransportReply
 
@@ -556,3 +557,8 @@ def test_errors_never_carry_secrets_or_the_signature() -> None:
         text = f"{raised.value!s} {raised.value!r} {raised.value.args!r}"
         for value in (FAKE_KEY, signature, "user-fake0001", "SP-0001"):
             assert value not in text
+
+
+def test_the_generated_field_map_is_absent_until_the_wsdl_harvest() -> None:
+    # The recorder then refuses every plan with FIELD_MAP_MISSING (fail closed, design §4.5).
+    assert generated_field_map_text() is None
