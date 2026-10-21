@@ -61,3 +61,15 @@ path = "tests/gateway/test_sitest_transport.py"
 detector = "EMAIL"
 sha256 = "213b689cdf3c552edb55cc00b76369336c48a0835cd02b5faa86e99dae5f481b"
 reason = "A SITEST URL with a userinfo part that the endpoint check must refuse; not an address"
+
+[[allow]]
+path = "docs/runbooks/sitest_endpoint_record.md"
+detector = "IPV4"
+sha256 = "cd1c9712feab3cee8aeba9c6a56ef8a8960a18b9b88fc10a793958aca9e3c3c0"
+reason = "SITEST's address in the endpoint record of 21 Oct 2026 (runbook 01 step 7)"
+
+[[allow]]
+path = "src/airtimesat_platform/gateway/endpoints_sitest.py"
+detector = "IPV4"
+sha256 = "cd1c9712feab3cee8aeba9c6a56ef8a8960a18b9b88fc10a793958aca9e3c3c0"
+reason = "SITEST's pinned address, from the endpoint record of 21 Oct 2026 (runbook 02)"

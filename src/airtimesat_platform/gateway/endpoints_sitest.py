@@ -6,10 +6,11 @@ package (design ``docs/design/s2-recorder-masker.md`` §7.1); a test keeps every
 Iridium host name out of ``src/``.
 
 The transport connects only to an address in ``SITEST_PINNED_ADDRESSES`` and never asks DNS
-for the IWS host. The tuple stays empty until the CTO records SITEST's address and
-certificate in the first live step (§10.2 step 1) and pins it here in a reviewed change,
-checked against the runbook's record of SITEST's and Beta's addresses. While it is empty,
-every send is refused.
+for the IWS host. The CTO recorded SITEST's address and certificate in the first live step
+(§10.2 step 1, 21 Oct 2026; ``docs/runbooks/sitest_endpoint_record.md``) and pinned it here
+in a reviewed change (runbook ``02``). The certificate is a wildcard that also covers Beta's
+name, so this address, not the TLS name check, is what separates SITEST from Beta. If SITEST
+moves, every send fails until a reviewed re-pin.
 """
 
 from enum import StrEnum
@@ -19,10 +20,10 @@ SITEST_HOST: Final = "iwstraining.iridium.com"
 """Sent as SNI and ``Host``; the TLS certificate is verified for this name."""
 
 SITEST_PORT: Final = 8443
-"""The IWS port in the catalog. Annex D also mentions 8843, to be confirmed with Iridium."""
+"""The IWS port, confirmed by both SITEST WSDLs' ``soap12:address`` (21 Oct 2026)."""
 
-SITEST_PINNED_ADDRESSES: Final[tuple[str, ...]] = ()
-"""Reviewed IP addresses of SITEST. Empty until the CTO pins them (§10.2 step 1)."""
+SITEST_PINNED_ADDRESSES: Final[tuple[str, ...]] = ("174.68.1.46",)
+"""Reviewed IP addresses of SITEST, from the endpoint record of 21 Oct 2026."""
 
 
 class Endpoint(StrEnum):
