@@ -61,3 +61,15 @@ path = "tests/gateway/test_sitest_transport.py"
 detector = "EMAIL"
 sha256 = "213b689cdf3c552edb55cc00b76369336c48a0835cd02b5faa86e99dae5f481b"
 reason = "A SITEST URL with a userinfo part that the endpoint check must refuse; not an address"
+
+[[allow]]
+path = "src/airtimesat_platform/gateway/wsdl/sitest/provisioning.wsdl"
+detector = "SIGNATURE"
+sha256 = "d5afeb711ae5cbb737465e6050cb335450e76d8a3886ea45b7231e1fe0e108cc"
+reason = "WSDL element name of 27 characters (line 1743), a schema name, not an IWS signature"
+
+[[allow]]
+path = "src/airtimesat_platform/gateway/wsdl/sitest/provisioning.wsdl"
+detector = "SIGNATURE"
+sha256 = "6a528b7019a4eb868982545e760897bce7cff5b867a8395cd6a6dd3088b86dd0"
+reason = "WSDL element name of 27 characters (line 1750), a schema name, not an IWS signature"
