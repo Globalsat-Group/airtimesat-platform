@@ -16,6 +16,7 @@ from lxml import etree
 
 from airtimesat_platform.common.secrets import SecretNotAvailableError, SecretValue
 from airtimesat_platform.common.secrets_stdin import StdinSecretsProvider
+from airtimesat_platform.gateway import endpoints_sitest
 from airtimesat_platform.gateway.endpoints_sitest import Endpoint, endpoint_url
 from airtimesat_platform.gateway.errors import (
     GatewayError,
@@ -504,7 +505,10 @@ def test_close_closes_the_transport() -> None:
     assert transport.closed
 
 
-def test_without_a_pinned_address_nothing_is_sent() -> None:
+def test_without_a_pinned_address_nothing_is_sent(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Set the tuple here: once the CTO pins SITEST, the real constant would let this test
+    # build the real transport and send to SITEST from CI and every agent session.
+    monkeypatch.setattr(endpoints_sitest, "SITEST_PINNED_ADDRESSES", ())
     port = InProcessSitestPort(CREDENTIALS, clock=lambda: NOW)
     with pytest.raises(TransportError) as raised:
         _call(port)

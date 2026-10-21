@@ -8,6 +8,7 @@ redirects, one connection, no proxy from the environment and the reply cap.
 
 import asyncio
 import datetime as dt
+import ipaddress
 import ssl
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -300,8 +301,14 @@ def test_no_pinned_address_refuses_to_build(monkeypatch: pytest.MonkeyPatch) -> 
     assert raised.value.code == "SITEST_ADDRESS_NOT_PINNED"
 
 
-def test_the_pinned_address_is_empty_until_the_cto_pins_it() -> None:
-    assert endpoints_sitest.SITEST_PINNED_ADDRESSES == ()
+def test_every_pinned_address_is_one_global_ip_address() -> None:
+    # Empty until the CTO pins SITEST (runbook 02); then each entry is a plain, global IP.
+    pinned = endpoints_sitest.SITEST_PINNED_ADDRESSES
+    assert len(set(pinned)) == len(pinned)
+    for value in pinned:
+        address = ipaddress.ip_address(value)
+        assert str(address) == value
+        assert address.is_global
 
 
 @pytest.mark.parametrize(
