@@ -7,6 +7,7 @@ the test issues first, as an earlier recording would have.
 import base64
 import json
 import shutil
+import signal
 import sqlite3
 import subprocess
 from collections.abc import Callable
@@ -22,7 +23,7 @@ from airtimesat_platform.masker.engine import MaskingEngine
 from airtimesat_platform.masker.errors import VaultError
 from airtimesat_platform.masker.tokenize.surrogates import SPECS
 from airtimesat_platform.recorder import run as run_module
-from airtimesat_platform.recorder.output import tool_scan
+from airtimesat_platform.recorder.output import Staging, tool_scan
 from airtimesat_platform.recorder.store import Incident, LogRow, SqliteStore, open_store, utc_text
 
 Harness = Any  # tests/conftest.py's Harness (test modules cannot import conftest)
@@ -224,6 +225,28 @@ def test_a_local_branch_named_origin_main_does_not_pass(harness: Harness) -> Non
     git = ["git", "-C", str(harness.checkout)]
     subprocess.run([*git, "branch", "origin/main"], check=True)  # noqa: S603 - fixed program
     assert refused(harness, plan) == "code=HEAD_NOT_ON_MAIN"
+
+
+def test_a_commit_from_a_merged_branch_is_not_on_main(harness: Harness) -> None:
+    # Reachable from origin/main, but never one of main's own (first-parent) commits.
+    h = harness
+    plan = two_call_plan(h)
+
+    def git(*args: str) -> None:
+        command = ["git", "-C", str(h.checkout), *args]
+        subprocess.run(command, check=True)  # noqa: S603 - fixed program, arguments from the test
+
+    git("switch", "-q", "-c", "side")
+    (h.checkout / "README.md").write_text("work in progress\n", encoding="utf-8")
+    h.commit("WIP", push=False)
+    git("switch", "-q", "main")
+    git("merge", "-q", "--no-ff", "-m", "merge", "side")
+    git("push", "-q", "origin", "HEAD:main")
+    git("switch", "-q", "--detach", "side")
+    assert refused(h, plan) == "code=HEAD_NOT_ON_MAIN"
+    git("switch", "-q", "main")
+    answer_reads(h)
+    assert h.run(plan)[0] == 0
 
 
 def test_an_assume_unchanged_edit_is_refused(harness: Harness) -> None:
@@ -481,15 +504,24 @@ def test_a_masking_timeout_blocks(harness: Harness) -> None:
     blocked(harness, plan, "MASKING_TIMEOUT")
 
 
-def test_a_failed_vault_write_blocks(harness: Harness, monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    "code",
+    ["VAULT_WRITE_FAILED", "VAULT_INTEGRITY", "COLLISION_LIMIT", "SURROGATE_SPACE_EXHAUSTED"],
+)
+def test_a_vault_failure_stops_the_run_but_not_the_method(
+    harness: Harness, monkeypatch: pytest.MonkeyPatch, code: str
+) -> None:
+    # A wrong key or a full surrogate space is no fault of the method's field map (§8.4).
     plan = two_call_plan(harness)
     answer_reads(harness)
 
     def fail(*_: object) -> None:
-        raise VaultError("VAULT_WRITE_FAILED")
+        raise VaultError(code)
 
     monkeypatch.setattr(SqliteStore, "insert", fail)
-    blocked(harness, plan, "VAULT_WRITE_FAILED")
+    out = blocked(harness, plan, code)
+    assert "CALL_FAILED" in out
+    assert incidents(harness)[0][4] == 0
 
 
 def test_a_timeout_records_a_cooldown_that_holds_across_runs(harness: Harness) -> None:
@@ -525,28 +557,47 @@ def test_a_failure_after_written_calls_keeps_them_and_scans(harness: Harness) ->
         ("search", "sent", None),
         ("account", "failed", "NON_SOAP_BODY"),
     ]
+    # IWS answered the failed call: its outcome and duration, not its signed timestamp.
+    assert manifest["calls"][1]["outcome"] == "ok"
+    assert manifest["calls"][1]["iws_duration_ms"] == 250
+    assert "signed_ts" not in manifest["calls"][1]
     assert len(h.scanned) == 1
     assert "RUN_STOPPED" in out
 
 
+@pytest.mark.parametrize("failing", ["log", "write"])
 def test_a_failure_after_masking_writes_nothing_for_that_call(
-    harness: Harness, monkeypatch: pytest.MonkeyPatch
+    harness: Harness, monkeypatch: pytest.MonkeyPatch, failing: str
 ) -> None:
-    # Design §8.4: an exchange is written only once every stage, the run log included, passed.
+    # Design §8.4: an exchange is written only once every stage, the run log included, passed;
+    # and a call is reported and logged as sent only once its exchange is written.
     h = harness
     plan = two_call_plan(h)
     answer_reads(h)
-    log = SqliteStore.log
+    log, write = SqliteStore.log, Staging.write_exchange
 
     def failing_log(store: SqliteStore, row: LogRow) -> None:
         if row.call_id == "account" and row.decision == "sent":
             raise sqlite3.OperationalError("disk full")
         log(store, row)
 
-    monkeypatch.setattr(SqliteStore, "log", failing_log)
+    def failing_write(staging: Staging, seq: int, call_id: str, *body: bytes) -> Any:
+        if call_id == "account":
+            raise OSError
+        return write(staging, seq, call_id, *body)
+
+    if failing == "log":
+        monkeypatch.setattr(SqliteStore, "log", failing_log)
+    else:
+        monkeypatch.setattr(Staging, "write_exchange", failing_write)
     status, out = h.run(plan)
     assert status == 1, out
     assert "CALL_FAILED call_id=account" in out
+    assert "CALL_OK call_id=account" not in out
+    assert h.query("SELECT call_id, decision FROM run_log ORDER BY id") == [
+        ("search", "sent"),
+        ("account", "failed"),
+    ]
     assert [p.name for p in h.staged()] == [
         "001-search.request.xml",
         "001-search.response.xml",
@@ -573,6 +624,35 @@ def test_an_interrupt_mid_call_deletes_the_staging_folder_and_keeps_the_cooldown
     ]
     h.port.requests.clear()
     assert refused(h, plan) == "code=COOLDOWN_PENDING"
+
+
+@pytest.mark.parametrize("number", [signal.SIGTERM, signal.SIGHUP])
+def test_sigterm_or_sighup_mid_call_takes_the_interrupt_path(
+    harness: Harness, number: signal.Signals
+) -> None:
+    # Closing the terminal or a shutdown: the same clean-up as Ctrl-C (§5.1 step 6).
+    h = harness
+    plan = two_call_plan(h)
+    answer_reads(h)
+    before = signal.getsignal(number)
+
+    def deliver(_: str) -> bytes:
+        handler = signal.getsignal(number)
+        assert callable(handler)
+        handler(number, None)
+        return b""
+
+    answer(h, "getSubscriberAccount", deliver)
+    with pytest.raises(SystemExit) as info:
+        h.run(plan)
+    assert info.value.code == 128 + number
+    assert signal.getsignal(number) == before
+    assert h.staged() == []
+    assert h.scanned == []
+    assert incidents(h) == [("getSubscriberAccount", "RUN_INTERRUPTED", "", "", 0)]
+    assert h.query("SELECT MAX(cooldown_until) FROM run_log") == [
+        (utc_text(h.now + timedelta(seconds=60)),)
+    ]
 
 
 # ---------------------------------------------------------------- caps (§8.5 #18)
@@ -696,17 +776,37 @@ def test_a_scanner_hit_deletes_the_staging_folder(harness: Harness) -> None:
     h = harness
     plan = two_call_plan(h)
     answer_reads(h)
-    h.scanner_hit = True
+    h.scan_result = [("staged.xml:3", "leak_scan:IMEI"), ("staged.xml:4", "gitleaks:rule")]
     status, out = h.run(plan)
     assert status == 1
+    # Where, for the CTO: file, line and detector, never the value.
+    assert "SCAN_FINDING path=staged.xml:3 detector=leak_scan:IMEI" in out
+    assert "SCAN_FINDING path=staged.xml:4 detector=gitleaks:rule" in out
     assert "RUN_FAILED code=STAGING_SCAN_HIT" in out
     assert h.staged() == []
     assert not h.scanned[0].exists()
-    assert incidents(h) == [("", "STAGING_SCAN_HIT", "", "", 1)]
+    assert incidents(h) == [("", "STAGING_SCAN_HIT", "staged.xml:3", "leak_scan:IMEI", 1)]
     # A confirmed leak refuses every later run until the CTO clears it (§8.4).
     h.port.requests.clear()
     assert refused(h, plan).startswith("code=INCIDENT_OPEN")
     assert refused(h, plan, dry_run=True).startswith("code=INCIDENT_OPEN")
+
+
+def test_a_scanner_that_cannot_run_deletes_the_folder_but_blocks_nothing(
+    harness: Harness,
+) -> None:
+    h = harness
+    plan = two_call_plan(h)
+    answer_reads(h)
+    h.scan_result = None
+    status, out = h.run(plan)
+    assert status == 1
+    assert "RUN_FAILED code=SCANNER_UNAVAILABLE" in out
+    assert "SCAN_FINDING" not in out
+    assert h.staged() == []
+    assert incidents(h) == [("", "SCANNER_UNAVAILABLE", "", "", 0)]
+    h.scan_result = []
+    assert h.run(plan)[0] == 0
 
 
 def test_a_failed_staging_delete_is_reported(
@@ -715,7 +815,7 @@ def test_a_failed_staging_delete_is_reported(
     h = harness
     plan = two_call_plan(h)
     answer_reads(h)
-    h.scanner_hit = True
+    h.scan_result = [("staged.xml:3", "leak_scan:IMEI")]
 
     def broken(*_: object, **__: object) -> None:
         raise PermissionError
@@ -740,6 +840,11 @@ def test_a_planted_secret_deletes_the_staging_folder(harness: Harness) -> None:
     status, out = h.run(plan)
     assert status == 1
     assert "STAGING_SCAN_HIT" in out
+    # Which file, and which secret by name: never the value.
+    staged = "tests/fixtures/masked/recordings/RP-2026-003/20261021T120000Z"
+    assert (
+        f"SCAN_FINDING path={staged}/003-account.response.xml detector=secret:sitest.secret_key"
+    ) in out
     assert h.staged() == []
     assert h.secret_key not in out
 
@@ -759,22 +864,40 @@ def test_a_planted_key_in_base64_is_found(harness: Harness) -> None:
     assert h.staged() == []
 
 
-def tool(folder: Path, name: str, exit_code: int) -> None:
+def tool(folder: Path, name: str, exit_code: int, output: str = "") -> None:
     script = folder / name
-    script.write_text(f"#!/bin/sh\nexit {exit_code}\n", encoding="utf-8")
+    script.write_text(f"#!/bin/sh\nprintf '{output}'\nexit {exit_code}\n", encoding="utf-8")
     script.chmod(0o700)
 
 
+STAGED = "tests/fixtures/masked/recordings/RP-2026-003/r/manifest.json"
+GITLEAKS_OUT = (
+    "Finding:     REDACTED\\nSecret:      REDACTED\\nRuleID:      generic-api-key\\n"
+    "Entropy:     4.5\\nFile:        {checkout}/" + STAGED + "\\nLine:        2\\n"
+)
+
+
 @pytest.mark.parametrize(
-    ("leak_scan", "gitleaks", "hit"),
-    [(0, 0, False), (1, 0, True), (0, 1, True), (0, None, True)],
+    ("leak_scan", "gitleaks", "expected"),
+    [
+        ((0, ""), (0, ""), []),
+        ((1, f"{STAGED}:1: IMEI"), (0, ""), [(f"{STAGED}:1", "leak_scan:IMEI")]),
+        ((0, ""), (3, GITLEAKS_OUT), [(f"{STAGED}:2", "gitleaks:generic-api-key")]),
+        ((0, ""), (3, ""), [(STAGED.rpartition("/")[0], "gitleaks")]),
+        # A crash or a missing tool is not a finding.
+        ((1, ""), (0, ""), None),
+        ((0, ""), (1, ""), None),
+        ((0, ""), None, None),
+        # A finding from one scanner stands even if the other could not run.
+        ((1, f"{STAGED}:1: IMEI"), None, [(f"{STAGED}:1", "leak_scan:IMEI")]),
+    ],
 )
 def test_the_scanners_run_on_the_staged_files(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    leak_scan: int,
-    gitleaks: int | None,
-    hit: bool,
+    leak_scan: tuple[int, str],
+    gitleaks: tuple[int, str] | None,
+    expected: list[tuple[str, str]] | None,
 ) -> None:
     checkout = tmp_path / "checkout"
     staging = checkout / "tests" / "fixtures" / "masked" / "recordings" / "RP-2026-003" / "r"
@@ -782,16 +905,16 @@ def test_the_scanners_run_on_the_staged_files(
     (staging / "manifest.json").write_text("{}", encoding="utf-8")
     (checkout / "scripts").mkdir()
     (checkout / "scripts" / "leak_scan.py").write_text(
-        f"import sys\nassert sys.argv[1:] == ['{staging.relative_to(checkout)}/manifest.json']\n"
-        f"sys.exit({leak_scan})\n",
+        f"import sys\nassert sys.argv[1:] == ['{STAGED}']\n"
+        f"print({leak_scan[1]!r}, end='')\nsys.exit({leak_scan[0]})\n",
         encoding="utf-8",
     )
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     if gitleaks is not None:
-        tool(bin_dir, "gitleaks", gitleaks)
+        tool(bin_dir, "gitleaks", gitleaks[0], gitleaks[1].format(checkout=checkout))
     monkeypatch.setenv("PATH", str(bin_dir))
-    assert tool_scan(checkout, staging) is hit
+    assert tool_scan(checkout, staging) == expected
 
 
 # ---------------------------------------------------------------- retention at the start

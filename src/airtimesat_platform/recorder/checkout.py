@@ -1,9 +1,9 @@
 """Reviewed code only: the git checks before a run (design §5.1 step 1, §6.5).
 
-A live run needs a clean working tree whose ``HEAD`` is a commit on ``origin/main`` (checked
-after ``git fetch origin main``), and a plan file under ``recording-plans/`` tracked in that
-commit. A dry run needs the same clean checkout of ``main``, but its plan file may be
-unmerged: if it sits inside the checkout, it alone is left out of the clean-tree check.
+A live run needs a clean working tree whose ``HEAD`` is one of ``origin/main``'s first-parent
+commits (checked after ``git fetch origin main``), and a plan file under ``recording-plans/``
+tracked in that commit. A dry run needs the same clean checkout of ``main``, but its plan file
+may be unmerged: if it sits inside the checkout, it alone is left out of the clean-tree check.
 Either way, the recorder's own code must be imported from that checkout, and no tracked file
 may be marked assume-unchanged or skip-worktree (``git status`` does not see their edits).
 
@@ -76,6 +76,8 @@ def verify_checkout(checkout: Path, plan_path: Path, *, dry_run: bool, code: Pat
     sha = head.stdout.strip()
     if head.returncode != 0 or len(sha) not in (40, 64):
         raise RecorderError("GIT_FAILED")
-    if git(checkout, "merge-base", "--is-ancestor", sha, ORIGIN_MAIN).returncode != 0:
+    # main's own commits only: a commit from a merged branch was never reviewed as a tree.
+    main = git(checkout, "rev-list", "--first-parent", ORIGIN_MAIN)
+    if main.returncode != 0 or sha not in main.stdout.split():
         raise RecorderError("HEAD_NOT_ON_MAIN")
     return sha

@@ -12,7 +12,8 @@ open, so there is one writer.
 
 import os
 import sqlite3
-from collections.abc import Iterable, Set
+from collections.abc import Generator, Iterable, Set
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -125,6 +126,13 @@ class SqliteStore:
     def close(self) -> None:
         """Close the connection, which releases the lock."""
         self._db.close()
+
+    @contextmanager
+    def transaction(self) -> Generator[None]:
+        """Make the writes inside one transaction: all of them, or none if anything raises."""
+        self._db.execute("BEGIN")
+        with self._db:  # commits, or rolls back on an exception
+            yield
 
     def _one(self, sql: str, *args: object) -> tuple[object, ...] | None:
         return cast(tuple[object, ...] | None, self._db.execute(sql, args).fetchone())
@@ -328,6 +336,9 @@ def open_store(data_dir: Path, *, create: bool = True) -> SqliteStore:
     code = "VAULT_LOCKED"
     try:
         db.execute("PRAGMA locking_mode = EXCLUSIVE")
+        # Zero freed bytes: a tombstoned ciphertext must not survive in free pages, in the
+        # file or in a backup taken from it (§6.4). Many SQLite builds leave this off.
+        db.execute("PRAGMA secure_delete = ON")
         # The first write takes the exclusive lock, which the connection then keeps.
         db.execute("BEGIN EXCLUSIVE")
         db.execute("COMMIT")

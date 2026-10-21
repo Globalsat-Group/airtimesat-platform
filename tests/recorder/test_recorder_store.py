@@ -167,6 +167,32 @@ def test_retention_spares_test_inventory_and_plan_surrogates(
         ]
 
 
+def test_retention_leaves_no_ciphertext_in_the_file(
+    data_dir: Path, keys_factory: Keys, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Many SQLite builds leave secure_delete off: start each connection with it off.
+    connect = sqlite3.connect
+    opened: list[sqlite3.Connection] = []
+
+    def insecure(*args: Any, **kwargs: Any) -> sqlite3.Connection:
+        db = connect(*args, **kwargs)
+        db.execute("PRAGMA secure_delete = OFF")
+        opened.append(db)
+        return db
+
+    monkeypatch.setattr(sqlite3, "connect", insecure)
+    then = NOW - timedelta(days=91)
+    with open_store(data_dir) as store:
+        assert opened[0].execute("PRAGMA secure_delete").fetchone() == (1,)
+        vault = vault_at(store, keys_factory(1), then)
+        surrogates = [vault.issue("IMEI", canary("IMEI", 50 + n)) for n in range(50)]
+        stored = store.get("IMEI", surrogates[3])
+        assert stored is not None
+        assert stored.ciphertext is not None
+        assert store.apply_retention(NOW, protected=set(surrogates) - {surrogates[3]}) == 1
+    assert stored.ciphertext not in (data_dir / DB_NAME).read_bytes()
+
+
 def test_retention_deletes_run_log_rows_older_than_18_months(data_dir: Path) -> None:
     with open_store(data_dir) as store:
         store.log(row(NOW - timedelta(days=549), call_id="old"))

@@ -14,7 +14,8 @@ In order; any refusal before step 5 stops the run before any IWS call:
 6. Fail closed: on any refusal, block, exception or timeout nothing is written for that call,
    an incident is recorded (codes and paths only), the run stops and exits non-zero. A hit or
    an unknown element also refuses the method until the incident is cleared (§8.4). An
-   exception or interrupt that escapes the run deletes the staging folder unscanned.
+   exception, interrupt, SIGTERM or SIGHUP that escapes the run deletes the staging folder
+   unscanned.
 7. Before git: the manifest, then the scans of the staging folder (``output``).
 
 A dry run does steps 1 to 4, shows each masked request with its verdict, records the plan
@@ -30,6 +31,7 @@ import ctypes
 import logging
 import re
 import resource
+import signal
 import sys
 import time
 from collections.abc import Callable
@@ -75,6 +77,7 @@ from airtimesat_platform.recorder.checkout import CODE, verify_checkout
 from airtimesat_platform.recorder.config import Config
 from airtimesat_platform.recorder.errors import PlanRefusedError, RecorderError
 from airtimesat_platform.recorder.output import (
+    Finding,
     Scanner,
     Staging,
     secret_hit,
@@ -109,18 +112,25 @@ REQUEST_ID: Final = "requestId"
 # TODO(W): queue entry ids are their own id space, not IWS request ids, and D2's reads create
 # no queue entry. Refused until W confirms the names and the recorder records its own ids.
 QUEUE_ENTRY: Final = "getQueueEntry"
-# Fail-closed failures that write nothing and stop the run but leave the method enabled:
-# an exception, a timeout, the vault, a non-SOAP or oversized body, too many rows (§8.4).
+# Fail-closed failures that write nothing and stop the run but leave the method enabled (§8.4):
+# an exception, a timeout, the vault or a key, a non-SOAP or oversized body, too many rows.
 # Every other masking code (a hit, an unknown element) refuses the method until cleared.
 NOT_BLOCKING: Final = frozenset(
     {
         "MASKING_FAILED",
         "MASKING_TIMEOUT",
-        "VAULT_WRITE_FAILED",
         "NON_SOAP_BODY",
         "XML_PARSE",
         "XML_TOO_LARGE",
         "TOO_MANY_ROWS",
+        # The vault or a key (a wrong key, a corrupt row, a full surrogate space): no
+        # field-map fix to the method can clear these.
+        "VAULT_WRITE_FAILED",
+        "VAULT_INTEGRITY",
+        "COLLISION_LIMIT",
+        "SURROGATE_SPACE_EXHAUSTED",
+        "KEY_INVALID",
+        "KEY_REUSED",
     }
 )
 PR_SET_DUMPABLE: Final = 4
@@ -186,6 +196,10 @@ class _Log:
 
     def emit(self, message: str, **fields: object) -> None:
         self._logger.info(message, extra=fields)
+
+    def check(self, message: str, **fields: object) -> bool:
+        """Return whether ``emit`` would print this record; trip the filter if not."""
+        return self.filter.filter(logging.makeLogRecord({"msg": message, **fields}))
 
 
 # ---------------------------------------------------------------- XML helpers
@@ -370,35 +384,43 @@ class _Runner:
                 )
                 self.log.emit("RUN_STOPPED", call_id=call.id, code=self.stopped)
                 return True
-            # Every step that can still fail runs before the exchange is written (§8.4).
-            if call.operation == IWS_LOG:
-                ids = _field_values(masked.body, (LOG_ENTRY, REQUEST_ID))
-                self.store.add_recorder_requests(ids, self.plan.id, self.run_utc)
             new = sum(self.vault.issued.values()) - issued
-            self.store.log(
-                self._row(
-                    call,
-                    started,
-                    "sent",
-                    caller=self.caller,
-                    dropped=masked.dropped,
-                    detector_hits=0,
-                    **self.answered,
-                )
-            )
-            self.log.emit(
-                "CALL_OK",
-                call_id=call.id,
-                operation=call.operation,
-                outcome=self.answered["outcome"],
-                duration_ms=duration_ms,
-                dropped=masked.dropped,
-                issued=new,
-                count=filtered,
-            )
-            if self.log.filter.tripped:
+            ok = {
+                "call_id": call.id,
+                "operation": call.operation,
+                "outcome": self.answered["outcome"],
+                "duration_ms": duration_ms,
+                "dropped": masked.dropped,
+                "issued": new,
+                "count": filtered,
+            }
+            if not self.log.check("CALL_OK", **ok):
                 raise RecorderError("LOG_BLOCKED")
-            self.staging.write_exchange(seq, call.id, request.encode("utf-8"), masked.body)
+            # The run-log row and the request ids record a written exchange: all or nothing.
+            written = self.staging.write_exchange(
+                seq, call.id, request.encode("utf-8"), masked.body
+            )
+            try:
+                with self.store.transaction():
+                    if call.operation == IWS_LOG:
+                        ids = _field_values(masked.body, (LOG_ENTRY, REQUEST_ID))
+                        self.store.add_recorder_requests(ids, self.plan.id, self.run_utc)
+                    self.store.log(
+                        self._row(
+                            call,
+                            started,
+                            "sent",
+                            caller=self.caller,
+                            dropped=masked.dropped,
+                            detector_hits=0,
+                            **self.answered,
+                        )
+                    )
+            except BaseException:
+                for path in written:
+                    path.unlink(missing_ok=True)
+                raise
+            self.log.emit("CALL_OK", **ok)
         except Exception as exc:  # fail closed: codes only, never the message
             self._fail(call, started, exc, seq, n)
             return False
@@ -421,7 +443,11 @@ class _Runner:
         return True
 
     def _manifest_entry(self, seq: int, call: Call, n: int, decision: str, code: str) -> None:
-        """Add the manifest entry of a call that was not written: its decision and code."""
+        """Add the manifest entry of a call that was not written: its decision and code.
+
+        If IWS answered, the entry keeps its outcome and duration too.
+        """
+        answered = {k: v for k, v in self.answered.items() if k != "signed_ts"}
         self.calls.append(
             {
                 "seq": seq,
@@ -430,6 +456,7 @@ class _Runner:
                 "operation": call.operation,
                 "decision": decision,
                 "code": code,
+                **answered,
             }
         )
 
@@ -512,7 +539,7 @@ class _Runner:
 
     # ------------------------------------------------------------ before git
 
-    def finish(self, checkout: Path, scanner: Scanner, needles: frozenset[bytes]) -> int:
+    def finish(self, checkout: Path, scanner: Scanner, needles: dict[bytes, str]) -> int:
         """Write the manifest, scan the staging folder, and print the summary."""
         if self.staging.files():
             self.staging.write_manifest(
@@ -527,18 +554,10 @@ class _Runner:
                     "calls": self.calls,
                 }
             )
-            files = self.staging.files()
-            if scanner(checkout, self.staging.path) or secret_hit(files, needles):
-                self._delete_staging()
-                # A run-level incident: it refuses every run until it is cleared (§8.4).
-                incident = self.store.add_incident(
-                    Incident(
-                        self.run_utc, self.plan.id, "", None, "STAGING_SCAN_HIT", "", "", True
-                    ),
-                    self.now(),
-                )
-                self.log.emit("RUN_FAILED", code="STAGING_SCAN_HIT", incident=incident)
-                return EXIT_FAILED
+            found = scanner(checkout, self.staging.path)
+            hits = (found or []) + secret_hit(checkout, self.staging.files(), needles)
+            if hits or found is None:
+                return self._scan_failed(hits)
         self.log.emit(
             "RUN_STOPPED" if self.failed else "RUN_DONE",
             plan_id=self.plan.id,
@@ -548,6 +567,24 @@ class _Runner:
         )
         self.log.out.write(BACKUP_REMINDER)
         return EXIT_FAILED if self.failed else EXIT_OK
+
+    def _scan_failed(self, hits: list[Finding]) -> int:
+        """Show where each finding is, delete the staging folder and record an incident.
+
+        A finding is a run-level incident that refuses every run until it is cleared (§8.4);
+        a scanner that could not run is not.
+        """
+        for path, detector in hits:
+            self.log.emit("SCAN_FINDING", path=path, detector=detector)
+        self._delete_staging()
+        code = "STAGING_SCAN_HIT" if hits else "SCANNER_UNAVAILABLE"
+        path, detector = hits[0] if hits else ("", "")
+        incident = self.store.add_incident(
+            Incident(self.run_utc, self.plan.id, "", None, code, path, detector, bool(hits)),
+            self.now(),
+        )
+        self.log.emit("RUN_FAILED", code=code, incident=incident)
+        return EXIT_FAILED
 
     def _delete_staging(self) -> None:
         try:
@@ -599,6 +636,11 @@ async def _live(runner: _Runner, port: SitestPort) -> None:
     finally:
         if isinstance(port, InProcessSitestPort):
             await port.close()
+
+
+def _terminate(signum: int, _: object) -> None:
+    """Raise on SIGTERM or SIGHUP, so that the run's abort path cleans up (§5.1 step 6)."""
+    raise SystemExit(128 + signum)
 
 
 def _secrets(source: SecretsSource, dry_run: bool) -> StdinSecretsProvider:
@@ -709,13 +751,19 @@ def run_plan(
                 runner.dry_run()
                 log.emit("DRY_RUN_DONE", plan_id=plan.id, count=len(plan.calls))
                 return EXIT_OK
+            # Closing the terminal or a shutdown must not skip the abort path either.
+            previous = {n: signal.signal(n, _terminate) for n in (signal.SIGTERM, signal.SIGHUP)}
             try:
                 asyncio.run(_live(runner, port))
-                needles = secret_needles(provider.get_secret(n) for n in sorted(provider.names()))
+                names = sorted(provider.names())
+                needles = secret_needles((n, provider.get_secret(n)) for n in names)
                 return runner.finish(config.checkout, scanner, needles)
             except BaseException:
                 runner.abort()
                 raise
+            finally:
+                for number, handler in previous.items():
+                    signal.signal(number, handler)
     except PlanRefusedError as exc:
         index.vault = None  # the store is closed by now
         path, _, detector = exc.location.partition("#")

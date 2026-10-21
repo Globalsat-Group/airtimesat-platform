@@ -329,7 +329,8 @@ class Harness:
         }
         # The recorder's code, as if imported from the checkout (it checks where it runs from).
         self.code_file = self.checkout / "src" / "airtimesat_platform" / "recorder" / "checkout.py"
-        self.scanner_hit = False
+        # What the fake scanner reports: findings, or None for a scanner that could not run.
+        self.scan_result: list[tuple[str, str]] | None = []
         self.scanner_error: Exception | None = None
         self.scanned: list[Path] = []
         self.now = RUN_NOW
@@ -379,11 +380,11 @@ class Harness:
         }
         data = json.dumps(piped).encode()
 
-        def scanner(checkout: Path, staging: Path) -> bool:
+        def scanner(checkout: Path, staging: Path) -> list[tuple[str, str]] | None:
             self.scanned.append(staging)
             if self.scanner_error is not None:
                 raise self.scanner_error
-            return self.scanner_hit
+            return None if self.scan_result is None else list(self.scan_result)
 
         def port_factory(_: SitestCredentials) -> SitestPort:
             return self.port
