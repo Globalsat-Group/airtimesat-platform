@@ -676,12 +676,32 @@ def test_a_blank_identifier_filter_is_refused(
     assert (error.code, error.location) == (code, "calls[0]/request/msisdn")
 
 
+@pytest.mark.parametrize(
+    "field",
+    [
+        "<spAccount/>",
+        "<spAccount> </spAccount>",  # C: an account constant
+        "<ownerName/>",
+        "<ownerName> </ownerName>",  # P-ONE: only ever blank, so never present
+    ],
+)
+def test_a_blank_constant_or_personal_filter_is_refused(
+    refuse: Refuse, build: Build, make_call: MakeCall, field: str
+) -> None:
+    error = refuse(
+        build([make_call("p", "getPrepaidAccountDetail", f"<request>{field}</request>")])
+    )
+    name = field[1:].split(">")[0].split("/")[0]
+    assert (error.code, error.location) == ("IDENTIFIER_BLANK", f"calls[0]/request/{name}")
+
+
 def test_an_identifier_filter_left_out_or_given_passes(
     check: Check, build: Build, make_call: MakeCall, surrogate: Surrogate
 ) -> None:
     for msisdn in ("", f"<msisdn>{surrogate('MSISDN')}</msisdn>"):
         request_xml = f"<request>{msisdn}<limit>50</limit></request>"
         assert check(build([make_call("r", "getRechargeHistory", request_xml)]))
+    assert check(build([make_call("p", "getPrepaidAccountDetail", "<request/>")]))
 
 
 # ---------------------------------------------------------------- digest

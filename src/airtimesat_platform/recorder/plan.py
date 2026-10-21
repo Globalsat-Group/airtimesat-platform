@@ -49,6 +49,7 @@ from airtimesat_platform.masker.detect.scan import offline_exemption, scan_value
 from airtimesat_platform.masker.engine import MaskingEngine
 from airtimesat_platform.masker.errors import RequestRefusedError
 from airtimesat_platform.masker.fieldmap.model import (
+    IDENTIFIER_TREATMENTS,
     REVERSIBLE,
     Direction,
     FieldEntry,
@@ -324,6 +325,7 @@ def _check_escapes(text: str) -> None:
     digits could hide in it.
     """
     try:
+        # PyYAML's stubs leave yaml.scan's stream and return types unknown; the cast fixes them.
         tokens = cast(
             Iterator[yaml.Token],
             yaml.scan(text, Loader=yaml.SafeLoader),  # pyright: ignore[reportUnknownMemberType]
@@ -534,6 +536,11 @@ def _check_identifiers(ctx: FieldMapContext, plan: Plan, call: Call) -> None:
     _check_search_inputs(ctx, call, root)
 
 
+# Identifier treatments whose blank value is a blank filter. TYPED is resolved to its class
+# first. A P-ONE request field can only ever be blank, so its presence alone is refused.
+_BLANK_REFUSED: Final = IDENTIFIER_TREATMENTS - {Treatment.TYPED}
+
+
 def _check_search_inputs(ctx: FieldMapContext, call: Call, root: Element) -> None:
     """Every input of a read is a search input (design §5.5 step 8).
 
@@ -554,7 +561,7 @@ def _check_search_inputs(ctx: FieldMapContext, call: Call, root: Element) -> Non
         blank = not (element.text or "").strip()
         if treatment is Treatment.F and not blank:
             raise PlanRefusedError("FREE_TEXT_IN_SEARCH_INPUT", ctx.location(call.where, path))
-        if treatment in REVERSIBLE and blank:
+        if treatment in _BLANK_REFUSED and blank:
             raise PlanRefusedError("IDENTIFIER_BLANK", ctx.location(call.where, path))
 
 

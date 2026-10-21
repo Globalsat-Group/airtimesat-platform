@@ -204,10 +204,11 @@ jobs:
   # can change this job, though: a pull_request run uses the pull request's own workflow file.
   # What protects the job itself is Code Owner review of .github/ and the bot having no
   # Workflows permission (docs/SETUP_CHECKLIST.md); never approve a pull request that changes
-  # both a plan and a workflow. A pull request that changes a plan touches nothing else, and
-  # recording-plans/ holds regular files only. It runs on every pull request, so it can be a
-  # required check: with no changed plan it prints a notice and passes. No secret, no vault,
-  # no network beyond installing the base commit's locked dependencies.
+  # both a plan and a workflow. A pull request that changes a plan targets main and touches
+  # nothing else, and recording-plans/ is a directory of regular files only. It runs on every
+  # pull request, so it can be a required check: with no changed plan it prints a notice and
+  # passes. No secret, no vault, no network beyond installing the base commit's locked
+  # dependencies.
   recorder-check:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
@@ -237,11 +238,24 @@ jobs:
           git -C head diff --name-only -z --no-renames "${BASE_SHA}...${HEAD_SHA}" \
             > "$RUNNER_TEMP/changed.list"
           # Every status but deleted, so a type change (a plan turned into a symlink) is judged.
+          # No trailing slash: the pathspec must also match a recording-plans that is not a
+          # directory.
           git -C head diff --name-only -z --no-renames --diff-filter=d "${BASE_SHA}...${HEAD_SHA}" \
-            -- recording-plans/ > "$RUNNER_TEMP/plans.relative"
-          # recording-plans/ holds regular files only: a symlink (120000) would be judged by its
-          # target, which a later pull request could change unseen, and a submodule (160000)
-          # would not be judged at all.
+            -- recording-plans > "$RUNNER_TEMP/plans.relative"
+          # recording-plans/ is a directory of regular files only: a symlink (120000) would be
+          # judged by its target, which a later pull request could change unseen, and a
+          # submodule (160000) would not be judged at all. The first listing is not recursive
+          # and has no trailing slash, so it shows recording-plans itself whatever its type.
+          git -C head ls-tree -z "$HEAD_SHA" -- recording-plans > "$RUNNER_TEMP/top.list"
+          while IFS= read -r -d '' entry; do
+            case "${entry%% *}" in
+              040000) ;;
+              *)
+                echo "::error::recorder-check: recording-plans must be a directory, not a symlink, file or submodule."
+                exit 1
+                ;;
+            esac
+          done < "$RUNNER_TEMP/top.list"
           git -C head ls-tree -r -z "$HEAD_SHA" -- recording-plans/ > "$RUNNER_TEMP/tree.list"
           while IFS= read -r -d '' entry; do
             case "${entry%% *}" in
@@ -259,7 +273,7 @@ jobs:
           others=0
           while IFS= read -r -d '' path; do
             case "$path" in
-              recording-plans/*) ;;
+              recording-plans | recording-plans/*) ;;
               *) others=$((others + 1)) ;;
             esac
           done < "$RUNNER_TEMP/changed.list"
@@ -267,6 +281,13 @@ jobs:
             echo "::notice::recorder-check: this pull request changes no recording plan."
             echo "count=0" >> "$GITHUB_OUTPUT"
             exit 0
+          fi
+          # The checker is the base commit's, so the base must be main. A pull request into
+          # another branch would be judged by that branch's checker, and retargeting it to main
+          # later does not run this job again (no edited trigger), so its green result would stand.
+          if [ "$GITHUB_BASE_REF" != "main" ]; then
+            echo "::error::recorder-check: a pull request that changes a recording plan must target main. After retargeting, push a new commit so this job runs again."
+            exit 1
           fi
           if [ "$others" -ne 0 ]; then
             echo "::error::recorder-check: a pull request that changes a recording plan touches nothing else (design s2-recorder-masker §7.3)."

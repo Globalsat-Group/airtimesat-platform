@@ -17,11 +17,11 @@ The CI workflow (`.github/workflows/ci.yml`, workflow name `CI`) has eight jobs.
 | `security` | gitleaks (working tree and git history), `pip-audit`, licence gate |
 | `terraform` | `terraform fmt`, `validate`, checkov |
 | `workflows` | actionlint, banned-trigger check, checkov on workflows |
-| `recorder-check` | `recorder check` on the recording plans a PR changes, with the base commit's checker; a PR that changes a plan touches nothing else, and `recording-plans/` holds regular files only. Pull requests only; it passes with a notice when no plan changed. A pull request runs its own copy of this workflow, so the job itself is protected by Code Owner review of `.github/` and by keeping the bot's Workflows permission off (step 9): never approve a PR that changes both a plan and a workflow |
+| `recorder-check` | `recorder check` on changed recording plans, with the base commit's checker (pull requests only) |
 
 The PR page shows them as `CI / lint (pull_request)` and so on, but the check name is the job name. If a job is ever renamed in `ci.yml`, update the ruleset in the same PR, or every merge is blocked.
 
-`recorder-check` was added by S2 PR D1, after the first seven were set in step 7. GitHub offers a check as a required check only after it has reported recently, so add it to the ruleset once that PR's `CI` run has finished.
+`recorder-check` was added by S2 PR D1, after the first seven were set in step 7. GitHub offers a check as a required check only after it has reported recently, so add it to the ruleset once that PR's `CI` run has finished. It passes with a notice when a PR changes no plan. A PR that changes a plan must target `main` and touch nothing else, and `recording-plans/` must be a directory of regular files only. A pull request runs its own copy of the workflow, so what protects this job is Code Owner review of `.github/` and the bot's Workflows permission being off (step 9). Never approve a PR that changes both a plan and a workflow.
 
 ## 1. Create the empty private repository
 

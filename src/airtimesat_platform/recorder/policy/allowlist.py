@@ -293,10 +293,12 @@ def _check_enum(root: Element, rule: EnumRule, where: str) -> None:
     at = f"{where}/{rule.element}"
     text = _value(element)
     _no_reference(text, at)
-    value = fold(text)
-    if rule.allowed is not None and value not in {fold(v) for v in rule.allowed}:
+    # An allowed value is matched exactly: the plan's text is sent as written, and IWS may
+    # read another spelling (equals, a full-width FALSE) differently. Refused values are
+    # folded, so no spelling of one gets through.
+    if rule.allowed is not None and text not in rule.allowed:
         raise PlanRefusedError(rule.code, at)
-    if value in {fold(v) for v in rule.refused}:
+    if fold(text) in {fold(v) for v in rule.refused}:
         raise PlanRefusedError(rule.code, at)
 
 

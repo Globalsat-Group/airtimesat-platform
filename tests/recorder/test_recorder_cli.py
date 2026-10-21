@@ -3,6 +3,7 @@
 import ast
 import io
 import os
+import re
 import secrets
 import string
 import subprocess
@@ -16,6 +17,7 @@ from typing import Final
 import pytest
 import yaml
 
+from airtimesat_platform.masker import xmlsafe
 from airtimesat_platform.masker.logsafe import safe_excepthook
 from airtimesat_platform.masker.tokenize.surrogates import SPECS
 from airtimesat_platform.recorder import __main__ as cli
@@ -308,6 +310,7 @@ CASES: list[tuple[str | bytes, str]] = [
     (f"id: *{S}\n", "YAML_ALIAS"),
     (f"id: !{S} x\n", "YAML_TAG"),
     (f"<<: {{{S}: 1}}\n", "YAML_MERGE_KEY"),
+    (f"title: {S}\n1: {S}\n", "YAML_NON_STRING_KEY"),
     (f"title: {S}\n".encode() + b"\xff", "PLAN_NOT_UTF8"),
     (plan(title=f"{S}.{IRIDIUM}"), "IRIDIUM_HOST_IN_PLAN"),
     (plan(one("accountSearch", searching(f"{S}.iridium&#46;com"))), "IRIDIUM_HOST_IN_PLAN"),
@@ -653,12 +656,86 @@ CASES: list[tuple[str | bytes, str]] = [
         plan(one("getRechargeHistory", "<request><msisdn> </msisdn><limit>5</limit></request>")),
         "IDENTIFIER_BLANK",
     ),
+    # Codes from named constants and allowlist rules
+    (
+        plan(
+            one(
+                "accountSearch",
+                searching(IMEI, filter_type="SMART", extra=f"<comment>{S}</comment>"),
+            )
+        ),
+        "FILTER_SMART_REFUSED",
+    ),
+    # Codes passed through from the masker's request parse and check
+    (plan(one("accountSearch", searching(IMEI, extra=S))), "MIXED_CONTENT"),
+    (
+        plan(one("accountSearch", searching(IMEI, extra=f"<comment><x>{S}</x></comment>"))),
+        "UNEXPECTED_CHILDREN",
+    ),
+    (
+        plan(one("accountSearch", searching(IMEI, extra=f"<comment><![CDATA[{S}]]></comment>"))),
+        "XML_CDATA",
+    ),
+    (plan(one("accountSearch", f"<!DOCTYPE {S}>" + searching(IMEI))), "XML_DTD"),
+    (
+        plan(one("accountSearch", searching(IMEI, extra=f"<comment>\x00{S}</comment>"))),
+        "XML_ENCODING",
+    ),
+    (
+        plan(
+            one(
+                "accountSearch",
+                searching(IMEI, extra=f"<comment>{'<a>' * 70}{S}{'</a>' * 70}</comment>"),
+            )
+        ),
+        "XML_TOO_DEEP",
+    ),
+    (
+        plan(
+            one(
+                "getRechargeHistory",
+                f'<request {XSI}><msisdn xsi:nil="{S}"/><limit>5</limit></request>',
+            )
+        ),
+        "XSI_NIL_INVALID",
+    ),
+    (
+        plan(
+            one(
+                "getRechargeHistory",
+                f'<request {XSI}><msisdn xsi:type="{S}:{S}:x">1</msisdn><limit>5</limit></request>',
+            )
+        ),
+        "XSI_TYPE_INVALID",
+    ),
+    (
+        plan(
+            one(
+                "getRechargeHistory",
+                f'<request {XSI}><msisdn xsi:nil="true"/><limit>5</limit><x>{S}</x></request>',
+            )
+        ),
+        "NIL_NOT_ALLOWED",
+    ),
+    (
+        plan(one("getPrepaidAccountDetail", f"<request><spAccount>{S}</spAccount></request>")),
+        "CONSTANT_UNKNOWN",
+    ),
+    (
+        plan(one("getPrepaidAccountDetail", f"<request><ownerName>{S}</ownerName></request>")),
+        "NOT_REVERSIBLE",
+    ),
+    (
+        plan(one("getPrepaidAccountDetail", f"<request><note>{S}</note></request>")),
+        "UNCLASSIFIED_ELEMENT",
+    ),
+    (plan(one("getModels", f"<request><x>{S}</x></request>")), "OPERATION_NOT_IN_FIELD_MAP"),
 ]
 
 # Refusals about the file itself rather than its text; see test_file_refusals_print_no_value.
 FILE_CASES: Final = frozenset({"PLAN_NOT_REGULAR_FILE", "PLAN_TOO_LARGE", "PLAN_UNREADABLE"})
-# Literal refusal codes no plan can reach today, each with the reason. A new code must be
-# added to CASES (or here, with its reason), so every refusal path runs with the sentinel.
+# Refusal codes no plan can reach today, each with the reason. A new code must be added to
+# CASES (or here, with its reason), so every refusal path runs with the sentinel.
 UNREACHABLE: Final = {
     # A read on its own endpoint passes the hard blocks, and any other known method is a
     # write (WRITES_NOT_SUPPORTED) or refused by name first.
@@ -666,6 +743,16 @@ UNREACHABLE: Final = {
     # The CLI decodes strict UTF-8 and escapes are refused, so no lone surrogate reaches a
     # request.
     "REQUEST_NOT_UTF8": "no lone surrogate can reach a request",
+    # Masker codes that the request check cannot raise.
+    "D_NEEDS_SENTINEL": "D is applied to responses only; a D request field is NOT_REVERSIBLE",
+    "D_ON_ROOT": "D is applied to responses only; a D request field is NOT_REVERSIBLE",
+    "MASKING_TIMEOUT": "a request within MAX_REQUEST_BYTES is walked well inside the budget",
+    "OPERATION_NOT_ALLOWED": "raised by start_call, which recorder check never calls",
+    "VAULT_UNAVAILABLE": "raised by unmask_request, which recorder check never calls",
+    "XML_ENTITY": "no DTD can declare an entity (XML_DTD), so an entity is XML_PARSE",
+    "XML_NODE": "the hard blocks parse the request inside a wrapper, so it has no siblings",
+    "XML_TOO_LARGE": "REQUEST_TOO_LARGE refuses a request over MAX_REQUEST_BYTES first",
+    "YAML_TOO_LARGE": "PLAN_TOO_LARGE refuses a plan over MAX_PLAN_BYTES first",
 }
 
 
@@ -683,31 +770,56 @@ def test_no_plan_value_reaches_the_output(
         assert REAL_IMEI not in printed
 
 
-def _literal_codes() -> set[str]:
-    """Return every string literal in the first argument of a ``PlanRefusedError(...)``."""
-    package = Path(cli.__file__).parent
+_CODE: Final = re.compile(r"[A-Z][A-Z0-9_]+")
+
+
+def _callee(node: ast.Call) -> str:
+    func = node.func
+    return func.id if isinstance(func, ast.Name) else getattr(func, "attr", "")
+
+
+def _code(node: ast.AST) -> str | None:
+    value: object = node.value if isinstance(node, ast.Constant) else None
+    return value if isinstance(value, str) and _CODE.fullmatch(value) else None
+
+
+def _refusal_codes() -> set[str]:
+    """Return every refusal code a plan could meet, as written in the source.
+
+    In the recorder: the literals in a ``PlanRefusedError(...)``, the module-level code
+    constants (``DEACTIVE`` and the like) and each ``EnumRule``'s code. In the masker's
+    request parse and check, which the recorder passes through: the literal codes given to
+    ``error(...)``, ``walk.error(...)``, ``RequestRefusedError(...)`` and ``RequestRefusal``;
+    and in the strict YAML loader, which ``load_plan`` passes through, ``StrictYamlError(...)``.
+    """
     codes: set[str] = set()
-    for source in package.rglob("*.py"):
+    for source in Path(cli.__file__).parent.rglob("*.py"):
         for node in ast.walk(ast.parse(source.read_text(encoding="utf-8"))):
-            if (
-                isinstance(node, ast.Call)
-                and isinstance(node.func, ast.Name)
-                and node.func.id == "PlanRefusedError"
-                and node.args
-            ):
-                codes |= {
-                    n.value
-                    for n in ast.walk(node.args[0])
-                    if isinstance(n, ast.Constant) and isinstance(n.value, str)
-                }
+            if isinstance(node, ast.Call) and _callee(node) == "PlanRefusedError" and node.args:
+                codes |= {c for n in ast.walk(node.args[0]) if (c := _code(n))}
+            elif isinstance(node, ast.Call) and _callee(node) == "EnumRule" and len(node.args) > 1:
+                codes |= {c for c in [_code(node.args[1])] if c}
+            elif isinstance(node, ast.AnnAssign) and node.value is not None:
+                codes |= {c for c in [_code(node.value)] if c}
+    masker = Path(xmlsafe.__file__).parent
+    request_side = {"error", "RequestRefusedError", "RequestRefusal", "StrictYamlError"}
+    for source in (
+        masker / "xmlsafe.py",
+        masker / "engine.py",
+        masker / "fieldmap" / "strict_yaml.py",
+    ):
+        for node in ast.walk(ast.parse(source.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Call) and _callee(node) in request_side and node.args:
+                codes |= {c for c in [_code(node.args[0])] if c}
     return codes
 
 
 def test_the_sentinel_cases_cover_every_refusal_path() -> None:
-    literal = _literal_codes()
-    assert len(literal) > 50
+    codes = _refusal_codes()
+    assert len(codes) > 80
+    assert {"ALWAYS_REFUSED_DEACTIVE", "FILTER_COND_REFUSED", "XML_CDATA"} <= codes
     covered = {code for _, code in CASES} | FILE_CASES
-    assert literal - covered == set(UNREACHABLE)
+    assert codes - covered == set(UNREACHABLE)
     assert SPECS["IMEI"].is_surrogate_shape(IMEI)
     assert SPECS["IMO"].is_surrogate_shape(IMO)
 

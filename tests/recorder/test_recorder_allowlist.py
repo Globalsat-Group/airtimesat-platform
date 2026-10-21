@@ -131,7 +131,22 @@ def test_an_account_search_within_its_limits_passes(
 # ---------------------------------------------------------------- search oracles (§8.5 #16)
 
 
-@pytest.mark.parametrize("cond", ["NOT_EQUAL", "CONTAINS", "LIKE", "STARTS_WITH", " contains ", ""])
+@pytest.mark.parametrize(
+    "cond",
+    [
+        "NOT_EQUAL",
+        "CONTAINS",
+        "LIKE",
+        "STARTS_WITH",
+        " contains ",
+        "",
+        # Only the exact literal: the plan's text is sent as written.
+        "equals",
+        "Equals",
+        " EQUALS ",
+        "\uff25\uff31\uff35\uff21\uff2c\uff33",  # full-width EQUALS
+    ],
+)
 def test_account_search_matches_exactly(
     refuse: Refuse,
     build: Build,
@@ -224,6 +239,15 @@ def test_queue_entries_created_by_is_set_by_the_recorder(
             "WILDCARD_REFUSED",
             "calls[0]/request/Wildcard",
         ),
+        # Only the exact literal FALSE: the plan's text is sent as written.
+        *(
+            (
+                f"<request><bulkRequestId>4711</bulkRequestId><Wildcard>{value}</Wildcard></request>",
+                "WILDCARD_REFUSED",
+                "calls[0]/request/Wildcard",
+            )
+            for value in ("false", "False", " FALSE ", "\uff26\uff21\uff2c\uff33\uff25")
+        ),
         (
             "<request><bulkRequestId>*</bulkRequestId></request>",
             "WILDCARD_REFUSED",
@@ -248,9 +272,7 @@ def test_bulk_action_search_matches_one_request_exactly(
     assert (error.code, error.location) == (code, location)
 
 
-@pytest.mark.parametrize(
-    "wildcard", ["", "<Wildcard>FALSE</Wildcard>", "<Wildcard>false</Wildcard>"]
-)
+@pytest.mark.parametrize("wildcard", ["", "<Wildcard>FALSE</Wildcard>"])
 def test_bulk_action_search_exact_match_passes(
     check: Check, build: Build, make_call: MakeCall, wildcard: str
 ) -> None:

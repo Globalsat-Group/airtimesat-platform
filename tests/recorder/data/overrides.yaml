@@ -1,6 +1,7 @@
 # Synthetic overrides for the recorder tests. Identifier inputs are reversible, so a plan
 # must name them by surrogate; enums, limits and dates are kept, so a reference there is
-# refused. accountSearch/request/comment is free text (F).
+# refused. accountSearch/request/comment is free text (F). getPrepaidAccountDetail has a C
+# and a P-ONE request field, so a blank filter of either class can be tested.
 format: airtimesat-overrides/1
 entries:
   - {operation: accountSearch, direction: request, path: request, treatment: KEEP}
@@ -66,6 +67,10 @@ entries:
   - {operation: getRechargeHistory, direction: request, path: request/limit, treatment: KEEP}
   - {operation: getRechargeHistory, direction: request, path: request/startRow, treatment: KEEP}
   - {operation: getRechargeHistory, direction: response, path: getRechargeHistoryResponse, treatment: KEEP}
+  - {operation: getPrepaidAccountDetail, direction: request, path: request, treatment: KEEP}
+  - {operation: getPrepaidAccountDetail, direction: request, path: request/spAccount, treatment: C, type: SP}
+  - {operation: getPrepaidAccountDetail, direction: request, path: request/ownerName, treatment: P-ONE, type: NAME}
+  - {operation: getPrepaidAccountDetail, direction: response, path: getPrepaidAccountDetailResponse, treatment: KEEP}
   - {operation: getEVoucherInventory, direction: request, path: request, treatment: KEEP}
   - {operation: getEVoucherInventory, direction: request, path: request/limit, treatment: KEEP}
   - {operation: getEVoucherInventory, direction: request, path: request/startRow, treatment: KEEP}

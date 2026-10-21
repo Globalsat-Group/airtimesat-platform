@@ -62,6 +62,12 @@ paths:
   - {operation: getRechargeHistory, direction: request, path: request/limit, xsd_type: int}
   - {operation: getRechargeHistory, direction: request, path: request/startRow, xsd_type: int}
   - {operation: getRechargeHistory, direction: response, path: getRechargeHistoryResponse, xsd_type: complex}
+  # getPrepaidAccountDetail (synthetic shape: a C and a P-ONE request field)
+  - {operation: getPrepaidAccountDetail, direction: request, path: request, xsd_type: complex}
+  - {operation: getPrepaidAccountDetail, direction: request, path: request/spAccount, xsd_type: string}
+  - {operation: getPrepaidAccountDetail, direction: request, path: request/ownerName, xsd_type: string}
+  - {operation: getPrepaidAccountDetail, direction: request, path: request/note, xsd_type: string}
+  - {operation: getPrepaidAccountDetail, direction: response, path: getPrepaidAccountDetailResponse, xsd_type: complex}
   # getEVoucherInventory (catalog: getEvoucherInventory)
   - {operation: getEVoucherInventory, direction: request, path: request, xsd_type: complex}
   - {operation: getEVoucherInventory, direction: request, path: request/limit, xsd_type: int}

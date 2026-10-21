@@ -72,10 +72,12 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _read(path: str) -> str:
-    """Read a plan: a regular file, never through a symlink, at most ``MAX_PLAN_BYTES``.
+    """Read a plan: a regular file that is not itself a symlink, at most ``MAX_PLAN_BYTES``.
 
     A symlink would make CI judge a file outside ``recording-plans/`` that a later pull
     request can change unseen, and a FIFO or a device could stall or flood the check.
+    ``O_NOFOLLOW`` guards only the last path component; the ``recorder-check`` CI job and
+    ``make plans`` refuse a ``recording-plans`` that is not a plain directory.
     """
     flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | getattr(os, "O_CLOEXEC", 0)
     try:

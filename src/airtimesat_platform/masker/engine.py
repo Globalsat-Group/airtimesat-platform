@@ -251,8 +251,9 @@ class MaskingEngine:
     ) -> None:
         """Build an engine over a validated field map and a vault.
 
-        With ``vault=None`` the engine can only ``check_request``; masking and unmasking
-        then refuse with ``VAULT_UNAVAILABLE``.
+        With ``vault=None`` the engine can only ``check_request``: ``unmask_request``
+        refuses with ``VAULT_UNAVAILABLE`` before it reads the request, even one with no
+        identifier, and ``mask_response`` blocks with it.
 
         ``constants`` maps a C label (such as ``SP``) to the ordered real values that get
         ``<label>-0001``, ``<label>-0002`` and so on; the recorder passes Globalsat's SP
@@ -318,8 +319,12 @@ class MaskingEngine:
         attribute or ``xsi:type``; mixed content, a comment, a processing instruction,
         CDATA or a DTD; an element beyond its ``maxOccurs``; an authentication field; a
         value that is not a surrogate, or a surrogate the masker never issued; a wildcard
-        in an identifier field; a real-format value in a kept or free-text field.
+        in an identifier field; a real-format value in a kept or free-text field. Raises
+        ``VAULT_UNAVAILABLE`` first on an engine built without a vault, so a mis-wired run
+        stops before any IWS call even when the request holds no identifier.
         """
+        if self._vault_or_none is None:
+            raise RequestRefusedError("VAULT_UNAVAILABLE")
         walk = _Walk(
             call.operation,
             Direction.REQUEST,

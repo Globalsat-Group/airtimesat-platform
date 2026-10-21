@@ -211,16 +211,31 @@ def test_refusals_carry_codes_never_values(checker: MaskingEngine) -> None:
 
 
 def test_the_check_resolves_nothing_and_touches_no_vault(
-    checker: MaskingEngine, vault: Vault
+    engine: MaskingEngine, vault: Vault
 ) -> None:
-    assert checker.check_request("accountSearch", search("IMEI", shaped("IMEI"))) is None
+    # On a vault-backed engine (the run-time re-check): a well-formed surrogate that was
+    # never issued passes, so nothing was resolved, and nothing is issued.
+    assert engine.check_request("accountSearch", search("IMEI", shaped("IMEI"))) is None
     assert vault.issued.total() == 0
 
 
-def test_an_engine_without_a_vault_cannot_mask_or_unmask(checker: MaskingEngine) -> None:
+@pytest.mark.parametrize(
+    ("operation", "request_xml"),
+    [
+        ("accountSearch", search("IMEI", shaped("IMEI"))),
+        # No identifier at all: still refused, so a mis-wired run stops before any call.
+        ("getSystemStatus", b"<request/>"),
+    ],
+)
+def test_an_engine_without_a_vault_cannot_unmask(
+    checker: MaskingEngine, operation: str, request_xml: bytes
+) -> None:
     with pytest.raises(RequestRefusedError) as unmasked:
-        checker.unmask_request(checker.start_call("accountSearch"), search("IMEI", shaped("IMEI")))
+        checker.unmask_request(checker.start_call(operation), request_xml)
     assert unmasked.value.code == "VAULT_UNAVAILABLE"
+
+
+def test_an_engine_without_a_vault_cannot_mask(checker: MaskingEngine) -> None:
     body = (
         b'<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body>'
         b"<getSystemStatusResponse><status>OK</status></getSystemStatusResponse>"
