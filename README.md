@@ -54,7 +54,7 @@ uv sync --locked   # install the locked dependencies into .venv
 make check         # every gate CI runs
 ```
 
-`make check` runs these targets, each also runnable on its own. CI runs one job per target, with the same name except `test`, whose job is `tests`:
+`make check` runs these targets, each also runnable on its own. CI runs one job per target, with the same name except `test`, whose job is `tests`, and `plans`, whose CI counterpart is `recorder-check`:
 
 | Target | What it runs | CI job |
 | --- | --- | --- |
@@ -62,6 +62,7 @@ make check         # every gate CI runs
 | `make typecheck` | `pyright` (strict) | `typecheck` |
 | `make contracts` | `lint-imports` | `contracts` |
 | `make test` | `pytest` | `tests` |
+| `make plans` | the working tree's `recorder check` over the plans changed against `origin/main`; anything in `recording-plans/` that is not a regular file fails | `recorder-check`: the plans the pull request changes, judged by the base commit's checker |
 | `make security` | gitleaks on the working tree, `pip-audit`, licence gate | `security` |
 | `make terraform` | `terraform fmt -check`, `init -backend=false -lockfile=readonly` + `validate` for `envs/sandbox`, checkov | `terraform` |
 | `make workflows` | `actionlint`, a check that bans `pull_request_target`, `workflow_run` and `issue_comment`, checkov on `.github/workflows` | `workflows` |

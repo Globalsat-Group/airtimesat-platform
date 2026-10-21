@@ -1,0 +1,87 @@
+# Synthetic generated field map for the recorder tests. The real one is generated from the
+# SITEST WSDL into gateway/wsdl/fieldmap/ (PR W). Operation and element names follow the
+# IWS catalog; the structure is invented. Every path is UNCLASSIFIED until the overrides.
+format: airtimesat-fieldmap/1
+source: synthetic-recorder-test-schema
+paths:
+  # accountSearch: a typed filter, limits, and an array of accounts in the response
+  - {operation: accountSearch, direction: request, path: request, xsd_type: complex}
+  - {operation: accountSearch, direction: request, path: request/filterType, xsd_type: enum, min_occurs: 0}
+  - {operation: accountSearch, direction: request, path: request/filterValue, xsd_type: string, min_occurs: 0}
+  - {operation: accountSearch, direction: request, path: request/filterCond, xsd_type: enum, min_occurs: 0}
+  - {operation: accountSearch, direction: request, path: request/limit, xsd_type: int}
+  - {operation: accountSearch, direction: request, path: request/startRow, xsd_type: int}
+  - {operation: accountSearch, direction: request, path: request/status, xsd_type: enum, min_occurs: 0}
+  - {operation: accountSearch, direction: request, path: request/comment, xsd_type: string, min_occurs: 0}
+  - {operation: accountSearch, direction: response, path: accountSearchResponse, xsd_type: complex}
+  - {operation: accountSearch, direction: response, path: accountSearchResponse/totalNumberOfRecords, xsd_type: int}
+  - {operation: accountSearch, direction: response, path: accountSearchResponse/subscribers, xsd_type: complex, min_occurs: 0}
+  - {operation: accountSearch, direction: response, path: accountSearchResponse/subscribers/subscriber, xsd_type: complex, min_occurs: 0, max_occurs: unbounded}
+  - {operation: accountSearch, direction: response, path: accountSearchResponse/subscribers/subscriber/accountNumber, xsd_type: string}
+  - {operation: accountSearch, direction: response, path: accountSearchResponse/subscribers/subscriber/imei, xsd_type: string, min_occurs: 0}
+  - {operation: accountSearch, direction: response, path: accountSearchResponse/subscribers/subscriber/accountStatus, xsd_type: enum}
+  - {operation: accountSearch, direction: response, path: accountSearchResponse/subscribers/subscriber/detailsType, xsd_type: enum, min_occurs: 0}
+  - {operation: accountSearch, direction: response, path: accountSearchResponse/subscribers/subscriber/details, xsd_type: string, min_occurs: 0}
+  # getSubscriberAccount
+  - {operation: getSubscriberAccount, direction: request, path: request, xsd_type: complex}
+  - {operation: getSubscriberAccount, direction: request, path: request/accountNo, xsd_type: string}
+  - {operation: getSubscriberAccount, direction: response, path: getSubscriberAccountResponse, xsd_type: complex}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]", xsd_type: complex}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/accountNumber", xsd_type: string}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/imei", xsd_type: string}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/accountStatus", xsd_type: enum}
+  # getDevices
+  - {operation: getDevices, direction: request, path: request, xsd_type: complex}
+  - {operation: getDevices, direction: request, path: request/serviceType, xsd_type: enum}
+  - {operation: getDevices, direction: request, path: request/deviceType, xsd_type: enum}
+  - {operation: getDevices, direction: request, path: request/numResults, xsd_type: int, min_occurs: 0}
+  - {operation: getDevices, direction: response, path: getDevicesResponse, xsd_type: complex}
+  # getVessels
+  - {operation: getVessels, direction: request, path: request, xsd_type: complex}
+  - {operation: getVessels, direction: request, path: request/id, xsd_type: string, min_occurs: 0}
+  - {operation: getVessels, direction: request, path: request/imo, xsd_type: string, min_occurs: 0}
+  - {operation: getVessels, direction: request, path: request/mmsi, xsd_type: string, min_occurs: 0}
+  - {operation: getVessels, direction: request, path: request/vesselName, xsd_type: string, min_occurs: 0}
+  - {operation: getVessels, direction: request, path: request/callSign, xsd_type: string, min_occurs: 0}
+  - {operation: getVessels, direction: response, path: getVesselsResponse, xsd_type: complex}
+  - {operation: getVessels, direction: response, path: getVesselsResponse/vessel, xsd_type: complex, min_occurs: 0, max_occurs: unbounded}
+  - {operation: getVessels, direction: response, path: getVesselsResponse/vessel/vesselName, xsd_type: string}
+  # getSubscriberOrgs (catalog: getSubscriberOrganizations)
+  - {operation: getSubscriberOrgs, direction: request, path: request, xsd_type: complex}
+  - {operation: getSubscriberOrgs, direction: request, path: request/Id, xsd_type: string, min_occurs: 0}
+  - {operation: getSubscriberOrgs, direction: request, path: request/Name, xsd_type: string, min_occurs: 0}
+  - {operation: getSubscriberOrgs, direction: response, path: getSubscriberOrgsResponse, xsd_type: complex}
+  # bulkActionSearch
+  - {operation: bulkActionSearch, direction: request, path: request, xsd_type: complex}
+  - {operation: bulkActionSearch, direction: request, path: request/bulkRequestId, xsd_type: string}
+  - {operation: bulkActionSearch, direction: request, path: request/Wildcard, xsd_type: string, min_occurs: 0}
+  - {operation: bulkActionSearch, direction: response, path: bulkActionSearchResponse, xsd_type: complex}
+  # getRechargeHistory
+  - {operation: getRechargeHistory, direction: request, path: request, xsd_type: complex}
+  - {operation: getRechargeHistory, direction: request, path: request/msisdn, xsd_type: string}
+  - {operation: getRechargeHistory, direction: request, path: request/limit, xsd_type: int}
+  - {operation: getRechargeHistory, direction: request, path: request/startRow, xsd_type: int}
+  - {operation: getRechargeHistory, direction: response, path: getRechargeHistoryResponse, xsd_type: complex}
+  # getEVoucherInventory (catalog: getEvoucherInventory)
+  - {operation: getEVoucherInventory, direction: request, path: request, xsd_type: complex}
+  - {operation: getEVoucherInventory, direction: request, path: request/limit, xsd_type: int}
+  - {operation: getEVoucherInventory, direction: request, path: request/startRow, xsd_type: int}
+  - {operation: getEVoucherInventory, direction: response, path: getEVoucherInventoryResponse, xsd_type: complex}
+  # getIwsRequests
+  - {operation: getIwsRequests, direction: request, path: request, xsd_type: complex}
+  - {operation: getIwsRequests, direction: request, path: request/iwsOperation, xsd_type: string}
+  - {operation: getIwsRequests, direction: request, path: request/startDate, xsd_type: string, min_occurs: 0}
+  - {operation: getIwsRequests, direction: request, path: request/endDate, xsd_type: string, min_occurs: 0}
+  - {operation: getIwsRequests, direction: request, path: request/Limit, xsd_type: int, min_occurs: 0}
+  - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse, xsd_type: complex}
+  # getQueueEntries
+  - {operation: getQueueEntries, direction: request, path: request, xsd_type: complex}
+  - {operation: getQueueEntries, direction: request, path: request/Endpoint, xsd_type: enum}
+  - {operation: getQueueEntries, direction: request, path: request/status, xsd_type: enum}
+  - {operation: getQueueEntries, direction: request, path: request/createdBy, xsd_type: string}
+  - {operation: getQueueEntries, direction: response, path: getQueueEntriesResponse, xsd_type: complex}
+  # getSystemStatus (both endpoints) and a reporting read
+  - {operation: getSystemStatus, direction: request, path: request, xsd_type: complex}
+  - {operation: getSystemStatus, direction: response, path: getSystemStatusResponse, xsd_type: complex}
+  - {operation: getReportTypes, direction: request, path: request, xsd_type: complex}
+  - {operation: getReportTypes, direction: response, path: getReportTypesResponse, xsd_type: complex}

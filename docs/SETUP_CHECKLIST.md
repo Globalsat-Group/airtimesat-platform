@@ -6,7 +6,7 @@ S0 action 3.1 is done when: the repository is private, `main` is protected, CI r
 
 ## Required status checks
 
-The CI workflow (`.github/workflows/ci.yml`, workflow name `CI`) has seven jobs. Their names are the required checks. Type them exactly, in lower case:
+The CI workflow (`.github/workflows/ci.yml`, workflow name `CI`) has eight jobs. Their names are the required checks. Type them exactly, in lower case:
 
 | Required check | What it gates |
 | --- | --- |
@@ -17,8 +17,11 @@ The CI workflow (`.github/workflows/ci.yml`, workflow name `CI`) has seven jobs.
 | `security` | gitleaks (working tree and git history), `pip-audit`, licence gate |
 | `terraform` | `terraform fmt`, `validate`, checkov |
 | `workflows` | actionlint, banned-trigger check, checkov on workflows |
+| `recorder-check` | `recorder check` on the recording plans a PR changes, with the base commit's checker; a PR that changes a plan touches nothing else, and `recording-plans/` holds regular files only. Pull requests only; it passes with a notice when no plan changed. A pull request runs its own copy of this workflow, so the job itself is protected by Code Owner review of `.github/` and by keeping the bot's Workflows permission off (step 9): never approve a PR that changes both a plan and a workflow |
 
 The PR page shows them as `CI / lint (pull_request)` and so on, but the check name is the job name. If a job is ever renamed in `ci.yml`, update the ruleset in the same PR, or every merge is blocked.
+
+`recorder-check` was added by S2 PR D1, after the first seven were set in step 7. GitHub offers a check as a required check only after it has reported recently, so add it to the ruleset once that PR's `CI` run has finished.
 
 ## 1. Create the empty private repository
 
@@ -78,10 +81,10 @@ The PR page shows them as `CI / lint (pull_request)` and so on, but the check na
     - Allowed merge methods: squash (recommended), so each PR is one commit on `main`.
   - Require status checks to pass: on.
     - Require branches to be up to date before merging: on.
-    - Add the seven checks from the table above: `lint`, `typecheck`, `contracts`, `tests`, `security`, `terraform`, `workflows`. For each, set the source to **GitHub Actions**, so no other app can report a passing check with the same name.
+    - Add the eight checks from the table above: `lint`, `typecheck`, `contracts`, `tests`, `security`, `terraform`, `workflows`, `recorder-check`. For each, set the source to **GitHub Actions**, so no other app can report a passing check with the same name.
   - Optional: require linear history; require signed commits.
 - **Note.** GitHub does not let authors approve their own PRs. With the CTO as the only Code Owner, a PR opened from the CTO's own account can only merge through the bypass; so does the foundations PR (step 8). Agent work comes from the bot (step 9), so this is the exception, not the rule. The bypass also means these rules do not bind the CTO: bypassing them is a deliberate act that GitHub records, not something GitHub prevents.
-- **Done when.** A direct push to `main` is rejected. That a PR cannot merge until all seven checks pass and the CTO approves is tested with the bot's first PR (step 9), because a PR from the CTO's account can never collect that approval.
+- **Done when.** A direct push to `main` is rejected. That a PR cannot merge until all eight checks pass and the CTO approves is tested with the bot's first PR (step 9), because a PR from the CTO's account can never collect that approval.
 
 ### 7b. Only humans merge: the restrict-updates ruleset
 
@@ -93,7 +96,7 @@ The PR page shows them as `CI / lint (pull_request)` and so on, but the check na
   - Bypass mode: **Exempt** if GitHub offers it, otherwise **For pull requests only**. With For pull requests only, GitHub shows every merge as blocked and the CTO must tick the box to merge without waiting for requirements (bypass). The CTO is also a bypass actor of the `main` ruleset, so that same box would let through a PR with a red check or no approval, and ticking it on every merge hides that difference. An exempt actor merges with the normal button and stays bound by the `main` ruleset unless they choose to bypass it. Either way the `main` ruleset still rejects the CTO's direct pushes. Verify all of this in GitHub with the test below.
 - **And.** Repository → Settings → General → Pull Requests: turn **Allow auto-merge** off, so every merge is a human pressing the button at that moment.
 - **Limit.** GitHub sees the account behind a token, not who is using it. An agent session whose GitHub access acts as the CTO's account holds the CTO's bypass, and no ruleset can stop it. On 20 Oct 2026 the GitHub tools in Claude Code sessions authenticated as `imtgsat`. CLAUDE.md forbids agents to merge; whether to also take merge rights away from that access is a CTO decision.
-- **Done when** (needs the bot of step 9). A bot PR with all seven checks green and the CTO's approval cannot be merged by the bot, and the CTO can merge it. Note whether the CTO's merge needed the bypass box: if it did, every merge is a bypass, so check the seven checks and the approval yourself before ticking it.
+- **Done when** (needs the bot of step 9). A bot PR with all eight checks green and the CTO's approval cannot be merged by the bot, and the CTO can merge it. Note whether the CTO's merge needed the bypass box: if it did, every merge is a bypass, so check the eight checks and the approval yourself before ticking it.
 
 ## 8. Review and merge the foundations PR (the first PR)
 
@@ -111,7 +114,7 @@ The PR page shows them as `CI / lint (pull_request)` and so on, but the check na
   - Install it with **Only select repositories** → `airtimesat-platform`.
   - Generate the private key and store it in Keeper. It never goes into this repository, an agent session or a CI secret.
   - Without the Workflows permission, the bot cannot push changes under `.github/workflows/`; the CTO commits those, or grants that permission later as a recorded decision.
-- **Done when.** A test PR opened by the bot shows the author as `<app-name>[bot]`, cannot merge until all seven checks pass and the CTO approves (step 7), cannot be merged by the bot even after that approval (step 7b), and the bot is in no bypass list.
+- **Done when.** A test PR opened by the bot shows the author as `<app-name>[bot]`, cannot merge until all eight checks pass and the CTO approves (step 7), cannot be merged by the bot even after that approval (step 7b), and the bot is in no bypass list.
 
 ## 10. Later steps (not needed for S0)
 

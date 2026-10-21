@@ -132,8 +132,8 @@ def is_nil(element: Element, error: type[MaskingError]) -> bool:
 def check_attributes(element: Element, error: type[MaskingError], path: str) -> None:
     """Refuse any attribute other than ``xsi:type``, ``xsi:nil`` and a plain ``xml:lang``.
 
-    Design §4.5 allows only ``xsi:type`` and ``xsi:nil``; ``xml:lang`` is accepted because a
-    SOAP 1.2 fault must carry it (to be confirmed by the CTO).
+    Design §4.5 allows ``xsi:type``, ``xsi:nil`` and a plain ``xml:lang`` (§13 #27, decided
+    by the CTO on 21 Oct 2026), because SOAP 1.2 faults carry it.
     """
     for name, value in element.attrib.items():
         key = str(name)

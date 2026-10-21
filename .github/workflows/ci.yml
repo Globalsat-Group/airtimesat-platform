@@ -2,7 +2,9 @@
 # The job ids below are the required status checks on main. Do not rename them
 # without updating the branch ruleset (docs/SETUP_CHECKLIST.md).
 # Each job installs only what it needs and then calls the matching make target,
-# so CI and `make check` run the same commands.
+# so CI and `make check` run the same commands. The one exception is recorder-check: it
+# judges a pull request's changed plans with the base commit's checker, where `make plans`
+# uses the working tree's.
 name: CI
 
 on:
@@ -196,3 +198,98 @@ jobs:
           uv tool dir --bin >> "$GITHUB_PATH"
       - name: make workflows
         run: make workflows
+
+  # Recording plans (design s2-recorder-masker §7.3, §9.2). The checker is the base commit's,
+  # never the pull request's, so a pull request cannot change the checker that judges it. It
+  # can change this job, though: a pull_request run uses the pull request's own workflow file.
+  # What protects the job itself is Code Owner review of .github/ and the bot having no
+  # Workflows permission (docs/SETUP_CHECKLIST.md); never approve a pull request that changes
+  # both a plan and a workflow. A pull request that changes a plan touches nothing else, and
+  # recording-plans/ holds regular files only. It runs on every pull request, so it can be a
+  # required check: with no changed plan it prints a notice and passes. No secret, no vault,
+  # no network beyond installing the base commit's locked dependencies.
+  recorder-check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out the pull request head (full history, for the diff)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          path: head
+      - name: Check out the base commit (the checker that judges the plans)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+      - name: List the changed recording plans
+        id: plans
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          # Paths are NUL-separated end to end, so spaces or odd characters in a name are safe.
+          git -C head diff --name-only -z --no-renames "${BASE_SHA}...${HEAD_SHA}" \
+            > "$RUNNER_TEMP/changed.list"
+          # Every status but deleted, so a type change (a plan turned into a symlink) is judged.
+          git -C head diff --name-only -z --no-renames --diff-filter=d "${BASE_SHA}...${HEAD_SHA}" \
+            -- recording-plans/ > "$RUNNER_TEMP/plans.relative"
+          # recording-plans/ holds regular files only: a symlink (120000) would be judged by its
+          # target, which a later pull request could change unseen, and a submodule (160000)
+          # would not be judged at all.
+          git -C head ls-tree -r -z "$HEAD_SHA" -- recording-plans/ > "$RUNNER_TEMP/tree.list"
+          while IFS= read -r -d '' entry; do
+            case "${entry%% *}" in
+              100644|100755) ;;
+              *)
+                echo "::error::recorder-check: recording-plans/ may hold only regular files, no symlink or submodule."
+                exit 1
+                ;;
+            esac
+          done < "$RUNNER_TEMP/tree.list"
+          plans=()
+          while IFS= read -r -d '' path; do
+            plans+=("$GITHUB_WORKSPACE/head/$path")
+          done < "$RUNNER_TEMP/plans.relative"
+          others=0
+          while IFS= read -r -d '' path; do
+            case "$path" in
+              recording-plans/*) ;;
+              *) others=$((others + 1)) ;;
+            esac
+          done < "$RUNNER_TEMP/changed.list"
+          if [ "${#plans[@]}" -eq 0 ]; then
+            echo "::notice::recorder-check: this pull request changes no recording plan."
+            echo "count=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$others" -ne 0 ]; then
+            echo "::error::recorder-check: a pull request that changes a recording plan touches nothing else (design s2-recorder-masker §7.3)."
+            exit 1
+          fi
+          if [ ! -f "$GITHUB_WORKSPACE/base/src/airtimesat_platform/recorder/plan.py" ]; then
+            echo "::error::recorder-check: the base commit has no recorder check yet, so no plan can be judged. Merge the checker first."
+            exit 1
+          fi
+          printf '%s\0' "${plans[@]}" > "$RUNNER_TEMP/plans.list"
+          echo "count=${#plans[@]}" >> "$GITHUB_OUTPUT"
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        if: steps.plans.outputs.count != '0'
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          # No cache: this job installs only the base commit's locked environment.
+          enable-cache: false
+      - name: recorder check, with the base commit's checker
+        if: steps.plans.outputs.count != '0'
+        working-directory: base
+        run: |
+          set -euo pipefail
+          mapfile -d '' -t plans < "$RUNNER_TEMP/plans.list"
+          uv sync --locked
+          uv run --locked python -m airtimesat_platform.recorder check -- "${plans[@]}"

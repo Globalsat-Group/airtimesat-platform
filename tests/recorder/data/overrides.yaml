@@ -1,0 +1,88 @@
+# Synthetic overrides for the recorder tests. Identifier inputs are reversible, so a plan
+# must name them by surrogate; enums, limits and dates are kept, so a reference there is
+# refused. accountSearch/request/comment is free text (F).
+format: airtimesat-overrides/1
+entries:
+  - {operation: accountSearch, direction: request, path: request, treatment: KEEP}
+  - {operation: accountSearch, direction: request, path: request/filterType, treatment: KEEP}
+  - operation: accountSearch
+    direction: request
+    path: request/filterValue
+    treatment: TYPED
+    typed_by:
+      sibling: filterType
+      values: {IMEI: "T-NUM:IMEI", MSISDN: "T-NUM:MSISDN", ACCOUNT_NUMBER: "T-NUM:CONTRACT", VESSEL_NAME: "T-STR:VESSEL", IP_ADDRESS: T-IP}
+  - {operation: accountSearch, direction: request, path: request/filterCond, treatment: KEEP}
+  - {operation: accountSearch, direction: request, path: request/limit, treatment: KEEP}
+  - {operation: accountSearch, direction: request, path: request/startRow, treatment: KEEP}
+  - {operation: accountSearch, direction: request, path: request/status, treatment: KEEP}
+  - {operation: accountSearch, direction: request, path: request/comment, treatment: F}
+  - {operation: accountSearch, direction: response, path: accountSearchResponse, treatment: KEEP}
+  - {operation: accountSearch, direction: response, path: accountSearchResponse/totalNumberOfRecords, treatment: KEEP}
+  - {operation: accountSearch, direction: response, path: accountSearchResponse/subscribers, treatment: KEEP}
+  - {operation: accountSearch, direction: response, path: accountSearchResponse/subscribers/subscriber, treatment: KEEP}
+  - {operation: accountSearch, direction: response, path: accountSearchResponse/subscribers/subscriber/accountNumber, treatment: T-NUM, type: CONTRACT}
+  - {operation: accountSearch, direction: response, path: accountSearchResponse/subscribers/subscriber/imei, treatment: T-NUM, type: IMEI}
+  - {operation: accountSearch, direction: response, path: accountSearchResponse/subscribers/subscriber/accountStatus, treatment: KEEP}
+  - {operation: accountSearch, direction: response, path: accountSearchResponse/subscribers/subscriber/detailsType, treatment: KEEP}
+  - operation: accountSearch
+    direction: response
+    path: accountSearchResponse/subscribers/subscriber/details
+    treatment: TYPED
+    typed_by:
+      sibling: detailsType
+      values: {IMEI: "T-NUM:IMEI", SIM: "T-NUM:ICCID"}
+  - {operation: getSubscriberAccount, direction: request, path: request, treatment: KEEP}
+  - {operation: getSubscriberAccount, direction: request, path: request/accountNo, treatment: T-NUM, type: CONTRACT}
+  - {operation: getSubscriberAccount, direction: response, path: getSubscriberAccountResponse, treatment: KEEP}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]", treatment: KEEP}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/accountNumber", treatment: T-NUM, type: CONTRACT}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/imei", treatment: T-NUM, type: IMEI}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/accountStatus", treatment: KEEP}
+  - {operation: getDevices, direction: request, path: request, treatment: KEEP}
+  - {operation: getDevices, direction: request, path: request/serviceType, treatment: KEEP}
+  - {operation: getDevices, direction: request, path: request/deviceType, treatment: KEEP}
+  - {operation: getDevices, direction: request, path: request/numResults, treatment: KEEP}
+  - {operation: getDevices, direction: response, path: getDevicesResponse, treatment: KEEP}
+  - {operation: getVessels, direction: request, path: request, treatment: KEEP}
+  - {operation: getVessels, direction: request, path: request/id, treatment: T-STR, type: ID}
+  - {operation: getVessels, direction: request, path: request/imo, treatment: T-NUM, type: IMO}
+  - {operation: getVessels, direction: request, path: request/mmsi, treatment: T-NUM, type: MMSI}
+  - {operation: getVessels, direction: request, path: request/vesselName, treatment: T-STR, type: VESSEL}
+  - {operation: getVessels, direction: request, path: request/callSign, treatment: T-STR, type: ID}
+  - {operation: getVessels, direction: response, path: getVesselsResponse, treatment: KEEP}
+  - {operation: getVessels, direction: response, path: getVesselsResponse/vessel, treatment: KEEP}
+  - {operation: getVessels, direction: response, path: getVesselsResponse/vessel/vesselName, treatment: T-STR, type: VESSEL}
+  - {operation: getSubscriberOrgs, direction: request, path: request, treatment: KEEP}
+  - {operation: getSubscriberOrgs, direction: request, path: request/Id, treatment: T-STR, type: ORG}
+  - {operation: getSubscriberOrgs, direction: request, path: request/Name, treatment: T-STR, type: ORG}
+  - {operation: getSubscriberOrgs, direction: response, path: getSubscriberOrgsResponse, treatment: KEEP}
+  - {operation: bulkActionSearch, direction: request, path: request, treatment: KEEP}
+  - {operation: bulkActionSearch, direction: request, path: request/bulkRequestId, treatment: KEEP, operational: true}
+  - {operation: bulkActionSearch, direction: request, path: request/Wildcard, treatment: KEEP}
+  - {operation: bulkActionSearch, direction: response, path: bulkActionSearchResponse, treatment: KEEP}
+  - {operation: getRechargeHistory, direction: request, path: request, treatment: KEEP}
+  - {operation: getRechargeHistory, direction: request, path: request/msisdn, treatment: T-NUM, type: MSISDN}
+  - {operation: getRechargeHistory, direction: request, path: request/limit, treatment: KEEP}
+  - {operation: getRechargeHistory, direction: request, path: request/startRow, treatment: KEEP}
+  - {operation: getRechargeHistory, direction: response, path: getRechargeHistoryResponse, treatment: KEEP}
+  - {operation: getEVoucherInventory, direction: request, path: request, treatment: KEEP}
+  - {operation: getEVoucherInventory, direction: request, path: request/limit, treatment: KEEP}
+  - {operation: getEVoucherInventory, direction: request, path: request/startRow, treatment: KEEP}
+  - {operation: getEVoucherInventory, direction: response, path: getEVoucherInventoryResponse, treatment: KEEP}
+  - {operation: getIwsRequests, direction: request, path: request, treatment: KEEP}
+  - {operation: getIwsRequests, direction: request, path: request/iwsOperation, treatment: KEEP}
+  - {operation: getIwsRequests, direction: request, path: request/startDate, treatment: KEEP}
+  - {operation: getIwsRequests, direction: request, path: request/endDate, treatment: KEEP}
+  - {operation: getIwsRequests, direction: request, path: request/Limit, treatment: KEEP}
+  - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse, treatment: KEEP}
+  - {operation: getQueueEntries, direction: request, path: request, treatment: KEEP}
+  - {operation: getQueueEntries, direction: request, path: request/Endpoint, treatment: KEEP}
+  - {operation: getQueueEntries, direction: request, path: request/status, treatment: KEEP}
+  - {operation: getQueueEntries, direction: request, path: request/createdBy, treatment: P-ONE, type: USER}
+  - {operation: getQueueEntries, direction: response, path: getQueueEntriesResponse, treatment: KEEP}
+  - {operation: getSystemStatus, direction: request, path: request, treatment: KEEP}
+  - {operation: getSystemStatus, direction: response, path: getSystemStatusResponse, treatment: KEEP}
+  - {operation: getReportTypes, direction: request, path: request, treatment: KEEP}
+  - {operation: getReportTypes, direction: response, path: getReportTypesResponse, treatment: KEEP}
+templates: []

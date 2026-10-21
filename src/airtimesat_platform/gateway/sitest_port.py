@@ -20,7 +20,10 @@ signer core and is the only holder of the SITEST secret. For each call it:
 
 It reaches the SITEST endpoints only: there is no Beta or production endpoint in the
 gateway, and the ``sitest-only`` import contract keeps this module away from ``gateway.api``.
-The field-map loader arrives with the WSDL snapshot.
+
+``generated_field_map_text`` returns the generated field map (design §4.5, §7.2) for the
+recorder to hand to the masker. It is absent until the WSDL harvest, and then every
+``recorder check`` fails closed.
 """
 
 import asyncio
@@ -31,6 +34,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
+from importlib import resources
 from typing import Final, Protocol
 
 from airtimesat_platform.common.secrets import (
@@ -67,6 +71,20 @@ TIMEOUT_COOLDOWN_S: Final = 60.0
 MAX_REMEMBERED_SIGNATURES: Final = 256
 CALLER_PATTERN: Final = re.compile(r"\Arec\.[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
 _FAULT_STATUSES: Final = frozenset({400, 500})
+# Package path of the generated field map; WSDL-derived files stay in the gateway (CLAUDE.md).
+GENERATED_FIELD_MAP: Final = ("wsdl", "fieldmap", "generated.yaml")
+
+
+def generated_field_map_text() -> str | None:
+    """Return the generated field map's text, or ``None`` while it does not exist.
+
+    The gateway does not parse it: the recorder hands it to the masker with the reviewed
+    overrides (``gateway-one-way``: the gateway never imports the masker).
+    """
+    resource = resources.files("airtimesat_platform.gateway").joinpath(*GENERATED_FIELD_MAP)
+    if not resource.is_file():
+        return None
+    return resource.read_text(encoding="utf-8")
 
 
 @dataclass(frozen=True, slots=True)

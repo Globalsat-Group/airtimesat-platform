@@ -6,6 +6,10 @@ returns masked bytes only when every stage is clean. Anything else raises: an un
 element, attribute or ``xsi:type``, a detector hit, a vault failure, a timeout or an
 unexpected exception. The caller then writes nothing for the call and stops the run.
 
+``check_request`` runs the same request walk as ``unmask_request`` without a vault, for
+``recorder check`` in CI (design §5.1, §5.5): it classifies every element and checks the
+shape of every identifier, but resolves nothing.
+
 The engine never logs and never puts a value in an exception.
 """
 
@@ -15,6 +19,7 @@ import time
 from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Final
 
 from airtimesat_platform.masker.detect.patterns import (
@@ -113,6 +118,15 @@ class MaskResult:
 
 
 @dataclass(frozen=True, slots=True)
+class RequestRefusal:
+    """Why ``check_request`` refused a request: a code, an element path and a detector id."""
+
+    code: str
+    path: str = ""
+    detector: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class UnmaskResult:
     """An unmasked request body. It holds real values: keep it in memory only."""
 
@@ -140,21 +154,36 @@ class _Record:
     sentinel: str | None
 
 
+class _Mode(Enum):
+    """What a pass does with each leaf."""
+
+    # Mask a response (or an embedded payload).
+    MASK = "mask"
+    # Replace each surrogate in a plan's request with its real value from the vault.
+    UNMASK = "unmask"
+    # Classify a plan's request and check each surrogate's shape; resolve nothing.
+    CHECK = "check"
+
+
 @dataclass
 class _Walk:
-    """State of one masking or unmasking pass."""
+    """State of one masking, unmasking or checking pass."""
 
     operation: str
     direction: Direction
     call: CallContext
     error: type[MaskingError]
     deadline: float
-    # True when leaves are unmasked (a plan's request); False when they are masked.
-    unmask: bool = False
+    mode: _Mode = _Mode.MASK
     records: list[_Record] = field(default_factory=list[_Record])
     placed: set[str] = field(default_factory=set[str])
     dropped: int = 0
     resolved: int = 0
+
+    @property
+    def unmask(self) -> bool:
+        """Return whether leaves are a plan's request (unmasked or checked), not masked."""
+        return self.mode is not _Mode.MASK
 
 
 def _fits(type_name: str, xsd_type: str) -> bool:
@@ -182,6 +211,22 @@ def _numeric_output_fits(treatment: Treatment, type_name: str | None, xsd_type: 
     return True
 
 
+def _surrogate_shape(type_name: str, value: str, where: str) -> str:
+    """Return ``value`` if it has the exact surrogate shape of its type; refuse otherwise."""
+    if not SPECS[type_name].is_surrogate_shape(value):
+        raise RequestRefusedError("NOT_A_SURROGATE", path=where, detector=type_name)
+    return value
+
+
+def _check_constant(entry: FieldEntry, label: str, value: str, where: str) -> None:
+    """Check a C value's form without the constants: a literal, or ``<label>-NNNN``."""
+    if value in entry.literals:
+        return
+    m = re.fullmatch(rf"{re.escape(label)}-(\d{{4}})", value)
+    if m is None or int(m.group(1)) < 1:
+        raise RequestRefusedError("CONSTANT_UNKNOWN", path=where, detector=label)
+
+
 def _is_ip(value: str) -> bool:
     try:
         ipaddress.ip_address(value)
@@ -196,7 +241,7 @@ class MaskingEngine:
     def __init__(
         self,
         field_map: FieldMap,
-        vault: Vault,
+        vault: Vault | None,
         *,
         templates: Sequence[Template] = (),
         constants: Mapping[str, Sequence[str]] | None = None,
@@ -206,12 +251,15 @@ class MaskingEngine:
     ) -> None:
         """Build an engine over a validated field map and a vault.
 
+        With ``vault=None`` the engine can only ``check_request``; masking and unmasking
+        then refuse with ``VAULT_UNAVAILABLE``.
+
         ``constants`` maps a C label (such as ``SP``) to the ordered real values that get
         ``<label>-0001``, ``<label>-0002`` and so on; the recorder passes Globalsat's SP
         numbers and names from the SITEST record. A C value not listed blocks.
         """
         self._map = field_map
-        self._vault = vault
+        self._vault_or_none = vault
         self._templates = tuple(templates)
         self._constants = {label: tuple(values) for label, values in (constants or {}).items()}
         self._budget = budget_seconds
@@ -241,6 +289,12 @@ class MaskingEngine:
                     raise MaskingError(
                         "FIELDMAP_TYPE_MISMATCH", path=f"{entry.operation}:{entry.path}"
                     )
+
+    @property
+    def _vault(self) -> Vault:
+        if self._vault_or_none is None:
+            raise MaskingError("VAULT_UNAVAILABLE")
+        return self._vault_or_none
 
     # ------------------------------------------------------------------ public API
 
@@ -272,8 +326,37 @@ class MaskingEngine:
             call,
             RequestRefusedError,
             self._deadline(),
-            unmask=True,
+            mode=_Mode.UNMASK,
         )
+        root = self._walk_request(walk, request)
+        return UnmaskResult(serialize(root, declaration=False), walk.resolved)
+
+    def check_request(self, operation: str, request: bytes) -> RequestRefusal | None:
+        """Check a plan's request without a vault; return ``None`` if it passes.
+
+        The same walk as ``unmask_request``, with the same refusals, except that an
+        identifier passes on the exact surrogate shape of its type instead of a vault row
+        (``IDENTIFIER_NOT_ISSUED`` is checked at run time), and a C value on its
+        ``<label>-NNNN`` form. Returns refusal codes and paths, never a value.
+        """
+        if operation not in self._operations:
+            return RequestRefusal("OPERATION_NOT_IN_FIELD_MAP")
+        walk = _Walk(
+            operation,
+            Direction.REQUEST,
+            CallContext(operation),
+            RequestRefusedError,
+            self._deadline(),
+            mode=_Mode.CHECK,
+        )
+        try:
+            self._walk_request(walk, request)
+        except RequestRefusedError as exc:
+            return RequestRefusal(exc.code, exc.path, exc.detector)
+        return None
+
+    def _walk_request(self, walk: _Walk, request: bytes) -> Element:
+        """Parse a plan's request and walk it in ``walk.mode`` (unmask or check)."""
         try:
             root = parse(
                 request, max_bytes=MAX_REQUEST_BYTES, request=True, error=RequestRefusedError
@@ -285,8 +368,9 @@ class MaskingEngine:
         except MaskingError as exc:
             raise RequestRefusedError(exc.code, exc.path, exc.detector) from None
         except Exception as exc:  # fail closed; report the type only
-            raise RequestRefusedError("UNMASK_FAILED", detector=type(exc).__name__) from None
-        return UnmaskResult(serialize(root, declaration=False), walk.resolved)
+            failed = "UNMASK_FAILED" if walk.mode is _Mode.UNMASK else "CHECK_FAILED"
+            raise RequestRefusedError(failed, detector=type(exc).__name__) from None
+        return root
 
     def mask_response(self, call: CallContext, response: bytes) -> MaskResult:
         """Mask a raw SOAP response, then run the runtime detector over the result.
@@ -732,6 +816,9 @@ class MaskingEngine:
             return
         if not value.strip():
             return
+        if treatment is Treatment.C and walk.mode is _Mode.CHECK:
+            _check_constant(entry, type_name or "C", value, where)
+            return
         if treatment is Treatment.C:
             element.text = self._unmask_constant(entry, type_name or "C", value, where)
             walk.call.known.add(element.text, value)
@@ -747,10 +834,13 @@ class MaskingEngine:
             raise RequestRefusedError("NOT_REVERSIBLE", path=where)
         if any(w in value for w in _WILDCARDS):
             raise RequestRefusedError("WILDCARD_REFUSED", path=where)
+        resolve = self._resolve if walk.mode is _Mode.UNMASK else _surrogate_shape
         try:
-            real = self._unmask_value(entry, treatment, type_name, value, where)
+            real = self._unmask_value(entry, treatment, type_name, value, where, resolve)
         except VaultError as exc:
             raise RequestRefusedError(exc.code, path=where, detector=exc.detector) from None
+        if walk.mode is _Mode.CHECK:
+            return
         walk.call.known.add(real, value)
         walk.resolved += 1
         element.text = real
@@ -775,46 +865,46 @@ class MaskingEngine:
         type_name: str | None,
         value: str,
         where: str,
+        resolve: Callable[[str, str, str], str],
     ) -> str:
+        """Map each surrogate in ``value`` through ``resolve(type, surrogate, where)``."""
         if treatment is Treatment.T_NUM or (treatment is Treatment.T_STR and entry.is_numeric):
             kind = "NUMERIC_ID" if treatment is Treatment.T_STR else (type_name or "NUMERIC_ID")
-            return self._resolve(kind, value, where)
+            return resolve(kind, value, where)
         if treatment is Treatment.T_STR:
-            return self._resolve(type_name or "VALUE", value, where)
+            return resolve(type_name or "VALUE", value, where)
         if treatment is Treatment.T_IP:
             m = _SUBNET.match(value.strip())
             if m is None:
                 raise RequestRefusedError("NOT_A_SURROGATE", path=where)
             addr = m.group("addr")
             kind = "IPV6" if ":" in addr else "IPV4"
-            return self._resolve(kind, addr, where) + (m.group("prefix") or "")
+            return resolve(kind, addr, where) + (m.group("prefix") or "")
         if treatment is Treatment.T_HOST:
             stripped = value.strip()
             bracketed = _BRACKETED.fullmatch(stripped)
             if bracketed is not None:
-                real = self._resolve("IPV6", bracketed.group("addr"), where)
+                real = resolve("IPV6", bracketed.group("addr"), where)
                 return "[" + real + "]" + (bracketed.group("port") or "")
             if SPECS["IPV6"].is_surrogate_shape(stripped):
-                return self._resolve("IPV6", stripped, where)
+                return resolve("IPV6", stripped, where)
             m = _PORT.match(stripped)
             assert m is not None  # noqa: S101 - matches any string
             host = m.group("host")
             if SPECS["HOST"].is_surrogate_shape(host):
-                return self._resolve("HOST", host, where) + (m.group("port") or "")
+                return resolve("HOST", host, where) + (m.group("port") or "")
             kind = "IPV6" if ":" in host else "IPV4"
-            return self._resolve(kind, host, where) + (m.group("port") or "")
+            return resolve(kind, host, where) + (m.group("port") or "")
         parts: list[str] = []
         for part in _EMAIL_SPLIT.split(value):
             if not part or _EMAIL_SPLIT.fullmatch(part):
                 parts.append(part)
             else:
-                parts.append(self._resolve("EMAIL", part, where))
+                parts.append(resolve("EMAIL", part, where))
         return "".join(parts)
 
     def _resolve(self, type_name: str, value: str, where: str) -> str:
-        if not SPECS[type_name].is_surrogate_shape(value):
-            raise RequestRefusedError("NOT_A_SURROGATE", path=where, detector=type_name)
-        return self._vault.resolve(type_name, value)
+        return self._vault.resolve(type_name, _surrogate_shape(type_name, value, where))
 
     def _unmask_constant(self, entry: FieldEntry, label: str, value: str, where: str) -> str:
         if value in entry.literals:
