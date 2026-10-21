@@ -130,6 +130,14 @@ jobs:
         run: uv sync --locked
       - name: make security
         run: make security
+      # The working-tree scan above misses a value added and removed inside a pull request,
+      # so every commit of the pull request is scanned too (design s2-recorder-masker §8.3).
+      - name: leak scan over the pull request's commits
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: uv run --locked python scripts/leak_scan.py --history "${BASE_SHA}..${HEAD_SHA}"
       - name: gitleaks on git history
         run: gitleaks git . --redact --no-banner --verbose
 

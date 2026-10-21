@@ -1,0 +1,104 @@
+# Synthetic overrides for the masker tests. getSystemStatusResponse/buildHost stays
+# UNCLASSIFIED on purpose: it must block.
+format: airtimesat-overrides/1
+entries:
+  - {operation: getSubscriberAccount, direction: request, path: request, treatment: KEEP}
+  - {operation: getSubscriberAccount, direction: request, path: request/accountNo, treatment: T-NUM, type: CONTRACT}
+  - {operation: getSubscriberAccount, direction: response, path: getSubscriberAccountResponse, treatment: KEEP}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]", treatment: KEEP}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/accountNumber", treatment: T-NUM, type: CONTRACT}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/accountStatus", treatment: KEEP}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/imei", treatment: T-NUM, type: IMEI}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/serviceProviderAccountNumber", treatment: C, type: SP}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/subscriberAccountMetadata", treatment: KEEP}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/subscriberAccountMetadata/spReference", treatment: T-STR, type: REF}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/deliveryDestinations", treatment: KEEP}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/deliveryDestinations/deliveryMethod", treatment: KEEP}
+  - operation: getSubscriberAccount
+    direction: response
+    path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/deliveryDestinations/destination"
+    treatment: TYPED
+    typed_by:
+      sibling: deliveryMethod
+      values: {IRIDIUM_DEVICE: "T-NUM:IMEI", EMAIL: T-EMAIL, DIRECT_IP: T-HOST}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/deliveryDestinations/port", treatment: KEEP}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/createdBy", treatment: P-ONE, type: USER}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/activationDate", treatment: KEEP}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[sbdSubscriberAccountImpl]/description", treatment: F}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]", treatment: KEEP}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/accountNumber", treatment: T-NUM, type: CONTRACT}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/msisdn", treatment: T-NUM, type: MSISDN}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/sim", treatment: T-NUM, type: ICCID}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/imei", treatment: T-NUM, type: IMEI}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/imsi", treatment: T-NUM, type: IMSI}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/twoStagePin", treatment: D}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/captainPin", treatment: D}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/contactEmail", treatment: T-EMAIL}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/ip", treatment: T-IP}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/latitude", treatment: G}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/vessel", treatment: KEEP}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/vessel/vesselName", treatment: T-STR, type: VESSEL}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/vessel/imo", treatment: T-NUM, type: IMO}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/vessel/mmsi", treatment: T-NUM, type: MMSI}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/vessel/buildYear", treatment: D}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/vessel/personCapacity", treatment: D}
+  - {operation: getSubscriberAccount, direction: response, path: "getSubscriberAccountResponse/account[telephonySubscriberAccountImpl]/vessel/vesselTon", treatment: D, sentinel: "0"}
+  - {operation: getSystemStatus, direction: request, path: request, treatment: KEEP}
+  - {operation: getSystemStatus, direction: response, path: getSystemStatusResponse, treatment: KEEP}
+  - {operation: getSystemStatus, direction: response, path: getSystemStatusResponse/iwsVersion, treatment: KEEP, operational: true}
+  - {operation: getSystemStatus, direction: response, path: getSystemStatusResponse/status, treatment: KEEP}
+  - {operation: getSystemStatus, direction: response, path: getSystemStatusResponse/activeCount, treatment: KEEP}
+  - {operation: getSystemStatus, direction: response, path: getSystemStatusResponse/statusDescription, treatment: F}
+  - {operation: accountSearch, direction: request, path: request, treatment: KEEP}
+  - {operation: accountSearch, direction: request, path: request/filterType, treatment: KEEP}
+  - operation: accountSearch
+    direction: request
+    path: request/filterValue
+    treatment: TYPED
+    typed_by:
+      sibling: filterType
+      values: {IMEI: "T-NUM:IMEI", MSISDN: "T-NUM:MSISDN", ACCOUNT_NUMBER: "T-NUM:CONTRACT", VESSEL_NAME: "T-STR:VESSEL", IP_ADDRESS: T-IP}
+  - {operation: accountSearch, direction: request, path: request/filterCond, treatment: KEEP}
+  - {operation: accountSearch, direction: request, path: request/limit, treatment: KEEP}
+  - {operation: accountSearch, direction: request, path: request/comment, treatment: F}
+  - {operation: accountSearch, direction: response, path: accountSearchResponse, treatment: KEEP}
+  - {operation: accountSearch, direction: response, path: accountSearchResponse/accounts, treatment: KEEP}
+  - {operation: accountSearch, direction: response, path: accountSearchResponse/accounts/account, treatment: KEEP}
+  - {operation: accountSearch, direction: response, path: accountSearchResponse/accounts/account/accountNumber, treatment: T-NUM, type: CONTRACT}
+  - {operation: accountSearch, direction: response, path: accountSearchResponse/accounts/account/imei, treatment: T-NUM, type: IMEI}
+  - {operation: accountSearch, direction: response, path: accountSearchResponse/accounts/account/vesselName, treatment: T-STR, type: VESSEL}
+  - {operation: accountSearch, direction: response, path: accountSearchResponse/accounts/account/status, treatment: KEEP, reason: "status words; checked by the detectors as a kept string"}
+  - {operation: setSubscriberAccountStatus, direction: request, path: request, treatment: KEEP}
+  - {operation: setSubscriberAccountStatus, direction: request, path: request/updateType, treatment: KEEP}
+  - operation: setSubscriberAccountStatus
+    direction: request
+    path: request/value
+    treatment: TYPED
+    typed_by:
+      sibling: updateType
+      values: {SUBSCRIBER_ACCOUNT_NUMBER: "T-NUM:CONTRACT", IMEI: "T-NUM:IMEI"}
+  - {operation: setSubscriberAccountStatus, direction: request, path: request/newStatus, treatment: KEEP}
+  - {operation: setSubscriberAccountStatus, direction: request, path: request/reason, treatment: F}
+  - {operation: setSubscriberAccountStatus, direction: request, path: request/contact, treatment: T-EMAIL}
+  - {operation: setSubscriberAccountStatus, direction: request, path: request/owner, treatment: C, type: SP, literals: [GLOBAL]}
+  - {operation: setSubscriberAccountStatus, direction: response, path: setSubscriberAccountStatusResponse, treatment: KEEP}
+  - {operation: setSubscriberAccountStatus, direction: response, path: setSubscriberAccountStatusResponse/returnMessage, treatment: F}
+  - {operation: getIwsRequests, direction: request, path: request, treatment: KEEP}
+  - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse, treatment: KEEP}
+  - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse/entry, treatment: KEEP}
+  - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse/entry/requestedOperation, treatment: KEEP}
+  - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse/entry/requestId, treatment: KEEP, operational: true}
+  - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse/entry/caller, treatment: P-ONE, type: USER}
+  - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse/entry/request, treatment: N, embedded: {format: xml, operation_from: requestedOperation, direction: request}}
+  - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse/entry/response, treatment: N, embedded: {format: xml, operation_from: requestedOperation, direction: response}}
+  - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse/entry/errorMessage, treatment: F}
+  - {operation: "*", direction: fault, path: Fault, treatment: KEEP}
+  - {operation: "*", direction: fault, path: Fault/faultcode, treatment: KEEP}
+  - {operation: "*", direction: fault, path: Fault/faultstring, treatment: F}
+  - {operation: "*", direction: fault, path: Fault/detail, treatment: KEEP}
+  - {operation: "*", direction: fault, path: Fault/detail/IwsFault, treatment: KEEP}
+  - {operation: "*", direction: fault, path: Fault/detail/IwsFault/errorCode, treatment: KEEP}
+  - {operation: "*", direction: fault, path: Fault/detail/IwsFault/errorMessage, treatment: F}
+templates:
+  - {id: TPL-T01, text: "Account {CONTRACT} was not found."}
+  - {id: TPL-T02, text: "System running normally"}

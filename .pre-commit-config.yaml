@@ -15,6 +15,14 @@ repos:
         entry: uv run ruff format --check --force-exclude
         language: system
         types_or: [python, pyi]
+      # Real identifiers (IMEI, ICCID, MSISDN, addresses, ...) in staged files. Installed on
+      # the trusted machine (design s2-recorder-masker §8.3, §10.2 step 2). Every file is
+      # passed, binary ones included: the scan itself refuses binary, compressed and
+      # non-UTF-8 files under tests/fixtures/ and recording-plans/.
+      - id: leak-scan
+        name: leak scan
+        entry: uv run python scripts/leak_scan.py
+        language: system
 
   - repo: https://github.com/gitleaks/gitleaks
     rev: 43fae355e6fe4d99d2a7b240a224b85e2903aeb4 # v8.21.2
