@@ -10,6 +10,13 @@ PACKAGES = [
     "airtimesat_platform.gateway",
     "airtimesat_platform.gateway.api",
     "airtimesat_platform.gateway.sitest_port",
+    "airtimesat_platform.gateway.signing",
+    "airtimesat_platform.gateway.envelope",
+    "airtimesat_platform.gateway.faults",
+    "airtimesat_platform.gateway.errors",
+    "airtimesat_platform.gateway.endpoints_sitest",
+    "airtimesat_platform.gateway.transport",
+    "airtimesat_platform.gateway.sitest_guard",
     "airtimesat_platform.masker",
     "airtimesat_platform.masker.engine",
     "airtimesat_platform.masker.errors",
@@ -49,11 +56,9 @@ def test_package_imports_with_docstring(name: str) -> None:
     [
         "airtimesat_platform.gateway",
         "airtimesat_platform.gateway.api",
-        "airtimesat_platform.gateway.sitest_port",
         "airtimesat_platform.recorder",
         "airtimesat_platform.domain",
         "airtimesat_platform.archive",
-        "airtimesat_platform.common.secrets_stdin",
     ],
 )
 def test_placeholder_packages_define_nothing_yet(name: str) -> None:
