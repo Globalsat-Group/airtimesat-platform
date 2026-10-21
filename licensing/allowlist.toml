@@ -12,6 +12,10 @@ allowed = [
     "PSF-2.0",
     "Python-2.0",
     "MPL-2.0",
+    # MIT No Attribution: the MIT grant without the attribution condition, so it asks less
+    # of us than MIT. Added in S2 PR A for cffi 2.1 (pulled in by cryptography), whose
+    # metadata declares MIT-0.
+    "MIT-0",
 ]
 
 # Licence names found in package metadata (mostly trove classifiers), mapped to SPDX.
