@@ -44,6 +44,7 @@ ALLOWED_FIELDS: Final = frozenset(
         "run_utc",
         "commit",
         "decision",
+        "incident",
     }
 )
 # A message is a code: upper-case words joined by underscores, nothing else.

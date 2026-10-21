@@ -14,10 +14,10 @@ What an agent may get: the refusal code, the call id, the detector id and the el
 
 **If the trusted machine or Keeper may itself be compromised, start here.** From a clean device, change the Keeper master password and end its other sessions. Revoke the GitHub tokens and SSH keys the laptop held. Wipe the laptop, or move to a clean device, and redo `03` Parts A and B. Only then store new secrets or keys (cases 3 and 4).
 
-## 1. `MASKING_BLOCKED` or another refusal
+## 1. `MASKING_BLOCKED` or another block
 
-1. The run stops and writes nothing for that call. The terminal shows the code, the call id and the detector id.
-2. The method stays refused until the fix merges and you run `recorder incident clear <id>` (D2).
+1. The run stops and writes nothing for that call. The terminal shows `CALL_BLOCKED` with the code, the call id and the detector id.
+2. The method stays refused until the fix merges and you run `recorder incident clear <id>` ([`04`](04_recording_session.md)). After `STAGING_SCAN_HIT`, every run stays refused until you clear it. A `CALL_FAILED` (a refusal, a timeout, an outage page, a disk error) refuses nothing: fix the cause and run again.
 3. Give the agents the code, call id, detector id and element path; they propose the fix in a PR.
 4. If you need the raw response, reproduce it by hand (SoapUI, under `01` "SoapUI calls"), for a read only, in the manual-call folder. Delete the raw file once the fix is verified. Never reproduce a write or a refused call.
 
@@ -51,7 +51,7 @@ Done when Iridium confirms the old secret no longer works.
 Committed recordings could then be de-pseudonymized (design §2.1).
 
 1. Stop all runs. Tell the people above and Legal.
-2. Generate new keys (`recorder keys init`, D2), start a new vault, replace the escrow, and take the recordings again (design §6.2).
+2. Generate new keys (`recorder keys init`, `03` Part D), start a new vault (move `vault.sqlite` out of `data_dir`; the next run creates a new one), replace the escrow, and take the recordings again (design §6.2).
 3. Delete the old vault and its backups once Legal confirms nothing must be kept.
 
 Done when new keys are in Keeper and escrow, and the recordings agents need are taken again.

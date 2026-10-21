@@ -1,7 +1,8 @@
 # Synthetic overrides for the recorder tests. Identifier inputs are reversible, so a plan
 # must name them by surrogate; enums, limits and dates are kept, so a reference there is
 # refused. accountSearch/request/comment is free text (F). getPrepaidAccountDetail has a C
-# and a P-ONE request field, so a blank filter of either class can be tested.
+# and a P-ONE request field, so a blank filter of either class can be tested. The IWS log
+# entries (iwsLog) carry a caller, for the run's caller filter and caller keep (S2 PR D2).
 format: airtimesat-overrides/1
 entries:
   - {operation: accountSearch, direction: request, path: request, treatment: KEEP}
@@ -81,11 +82,24 @@ entries:
   - {operation: getIwsRequests, direction: request, path: request/endDate, treatment: KEEP}
   - {operation: getIwsRequests, direction: request, path: request/Limit, treatment: KEEP}
   - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse, treatment: KEEP}
+  - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse/iwsLog, treatment: KEEP}
+  - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse/iwsLog/requestId, treatment: KEEP, operational: true}
+  - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse/iwsLog/requestedOperation, treatment: KEEP}
+  - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse/iwsLog/caller, treatment: P-ONE, type: USER}
+  - {operation: getIwsRequest, direction: request, path: request, treatment: KEEP}
+  - {operation: getIwsRequest, direction: request, path: request/requestId, treatment: KEEP, operational: true}
+  - {operation: getIwsRequest, direction: response, path: getIwsRequestResponse, treatment: KEEP}
+  - {operation: getIwsRequest, direction: response, path: getIwsRequestResponse/iwsLog, treatment: KEEP}
+  - {operation: getIwsRequest, direction: response, path: getIwsRequestResponse/iwsLog/requestId, treatment: KEEP, operational: true}
+  - {operation: getIwsRequest, direction: response, path: getIwsRequestResponse/iwsLog/caller, treatment: P-ONE, type: USER}
   - {operation: getQueueEntries, direction: request, path: request, treatment: KEEP}
   - {operation: getQueueEntries, direction: request, path: request/Endpoint, treatment: KEEP}
   - {operation: getQueueEntries, direction: request, path: request/status, treatment: KEEP}
   - {operation: getQueueEntries, direction: request, path: request/createdBy, treatment: P-ONE, type: USER}
   - {operation: getQueueEntries, direction: response, path: getQueueEntriesResponse, treatment: KEEP}
+  - {operation: getQueueEntry, direction: request, path: request, treatment: KEEP}
+  - {operation: getQueueEntry, direction: request, path: request/queueEntryId, treatment: KEEP, operational: true}
+  - {operation: getQueueEntry, direction: response, path: getQueueEntryResponse, treatment: KEEP}
   - {operation: getSystemStatus, direction: request, path: request, treatment: KEEP}
   - {operation: getSystemStatus, direction: response, path: getSystemStatusResponse, treatment: KEEP}
   - {operation: getReportTypes, direction: request, path: request, treatment: KEEP}

@@ -9,6 +9,11 @@ only. Imports only ``common``, ``masker`` and ``gateway.sitest_port``. Design
 - ``plan``: the strict plan loader, schema, references and canonical digest.
 - ``policy.allowlist``: the read allowlist and its per-method limits.
 - ``policy.hard_blocks``: DEACTIVE, bulk, always-refused methods and request shape.
-- ``__main__``: the command line. Only ``recorder check`` exists so far (S2 PR D1); it needs
-  no secret, no vault and no network, and also runs in CI and agent sessions.
+- ``run``: ``recorder run`` for reads, with process hardening and fail-closed handling.
+- ``store``: the SQLite vault store, run log, incidents and (for D3) test inventory.
+- ``checkout``, ``output``, ``config``, ``admin``: the git checks, the staged files and scans,
+  the configuration file, and ``keys init``, ``backup`` and ``incident clear``.
+- ``__main__``: the command line. ``recorder check`` needs no secret, no vault and no
+  network, so it also runs in CI and agent sessions; every other command runs only on the
+  trusted machine.
 """

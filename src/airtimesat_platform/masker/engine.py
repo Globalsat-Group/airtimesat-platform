@@ -52,6 +52,7 @@ from airtimesat_platform.masker.fieldmap.model import (
     Treatment,
 )
 from airtimesat_platform.masker.freetext import Template, slot_treatment
+from airtimesat_platform.masker.iwslog import is_recorder_caller
 from airtimesat_platform.masker.tokenize.surrogates import SPECS, one_way
 from airtimesat_platform.masker.tokenize.vault import Vault
 from airtimesat_platform.masker.xmlsafe import (
@@ -115,6 +116,8 @@ class MaskResult:
     fault: bool
     dropped: int
     surrogates_placed: int
+    # The surrogates placed in this response, for the recorder's per-run record cap (§5.3).
+    placed: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True, slots=True)
@@ -175,6 +178,10 @@ class _Walk:
     error: type[MaskingError]
     deadline: float
     mode: _Mode = _Mode.MASK
+    # The most rows a list may hold: the limit the request asked for (design §8.4).
+    max_rows: int | None = None
+    # Inside a list row: a repeated element nested in a row is not a row itself.
+    in_row: bool = False
     records: list[_Record] = field(default_factory=list[_Record])
     placed: set[str] = field(default_factory=set[str])
     dropped: int = 0
@@ -245,6 +252,7 @@ class MaskingEngine:
         *,
         templates: Sequence[Template] = (),
         constants: Mapping[str, Sequence[str]] | None = None,
+        constants_by_shape: bool = False,
         budget_seconds: float = BUDGET_SECONDS,
         max_response_bytes: int = MAX_RESPONSE_BYTES,
         clock: Callable[[], float] = time.monotonic,
@@ -257,12 +265,15 @@ class MaskingEngine:
 
         ``constants`` maps a C label (such as ``SP``) to the ordered real values that get
         ``<label>-0001``, ``<label>-0002`` and so on; the recorder passes Globalsat's SP
-        numbers and names from the SITEST record. A C value not listed blocks.
+        numbers and names from the SITEST record. A C value not listed blocks. With
+        ``constants_by_shape`` (a dry run, which has no SITEST record), ``unmask_request``
+        checks a C value on its ``<label>-NNNN`` form, as ``check_request`` does, and leaves it.
         """
         self._map = field_map
         self._vault_or_none = vault
         self._templates = tuple(templates)
         self._constants = {label: tuple(values) for label, values in (constants or {}).items()}
+        self._constants_by_shape = constants_by_shape
         self._budget = budget_seconds
         self._max_bytes = max_response_bytes
         self._clock = clock
@@ -377,18 +388,28 @@ class MaskingEngine:
             raise RequestRefusedError(failed, detector=type(exc).__name__) from None
         return root
 
-    def mask_response(self, call: CallContext, response: bytes) -> MaskResult:
+    def mask_response(
+        self, call: CallContext, response: bytes, *, max_rows: int | None = None
+    ) -> MaskResult:
         """Mask a raw SOAP response, then run the runtime detector over the result.
 
         Returns the masked envelope only when every element is classified and every
         detector is clean. Otherwise raises ``MaskingBlockedError`` with a code, an element
-        path and a detector id.
+        path and a detector id. ``max_rows`` is the limit the request asked for: more rows
+        than that in a list block with ``TOO_MANY_ROWS``. A row is a repeatable element
+        (``max_occurs`` other than 1) with no repeatable ancestor; repeated children inside a
+        row do not count.
         """
         if call.masked:
             raise MaskingBlockedError("CALL_ALREADY_MASKED")
         call.masked = True
         walk = _Walk(
-            call.operation, Direction.RESPONSE, call, MaskingBlockedError, self._deadline()
+            call.operation,
+            Direction.RESPONSE,
+            call,
+            MaskingBlockedError,
+            self._deadline(),
+            max_rows=max_rows,
         )
         try:
             envelope = parse(
@@ -404,7 +425,7 @@ class MaskingEngine:
             raise MaskingBlockedError(exc.code, exc.path, exc.detector) from None
         except Exception as exc:  # fail closed; report the type only
             raise MaskingBlockedError("MASKING_FAILED", detector=type(exc).__name__) from None
-        return MaskResult(body, fault, walk.dropped, len(walk.placed))
+        return MaskResult(body, fault, walk.dropped, len(walk.placed), frozenset(walk.placed))
 
     # ------------------------------------------------------------------ envelope
 
@@ -496,7 +517,16 @@ class MaskingEngine:
                 limit = None if child_entry is None else child_entry.max_occurs
                 if limit is not None and counts[child_name] > limit:
                     raise walk.error("MAX_OCCURS", path=safe_path([*shown_path, child_name]))
+                outer = walk.in_row
+                row = not outer and limit != 1
+                if row and walk.max_rows is not None and counts[child_name] > walk.max_rows:
+                    # Only a response walk has a row limit.
+                    raise MaskingBlockedError(
+                        "TOO_MANY_ROWS", path=safe_path([*shown_path, child_name])
+                    )
+                walk.in_row = outer or row
                 self._walk_element(walk, child, path, shown_path)
+                walk.in_row = outer
             return
         if children:
             raise walk.error("UNEXPECTED_CHILDREN", path=where)
@@ -535,6 +565,10 @@ class MaskingEngine:
             self._drop(walk, element, entry, where)
             return
         if treatment is Treatment.KEEP:
+            self._record(walk, element, entry, where, value)
+            return
+        if is_recorder_caller(local_name(element), value):
+            # The recorder's own caller is kept (design §13 #29); the detectors still run.
             self._record(walk, element, entry, where, value)
             return
         if treatment is Treatment.N:
@@ -821,7 +855,7 @@ class MaskingEngine:
             return
         if not value.strip():
             return
-        if treatment is Treatment.C and walk.mode is _Mode.CHECK:
+        if treatment is Treatment.C and (walk.mode is _Mode.CHECK or self._constants_by_shape):
             _check_constant(entry, type_name or "C", value, where)
             return
         if treatment is Treatment.C:

@@ -153,6 +153,8 @@ class EnumRule:
 class MethodRules:
     """The limits of one read (design §5.3, "Limits")."""
 
+    # The first range of a list read is its row limit: the recorder blocks a reply with more
+    # rows (design §8.4).
     ranges: tuple[Range, ...] = ()
     window: Window | None = None
     enums: tuple[EnumRule, ...] = ()

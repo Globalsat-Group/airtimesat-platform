@@ -8,8 +8,6 @@
 | **Design** | [§5.7](../design/s2-recorder-masker.md#57-the-hard-block-on-deactive), [§13](../design/s2-recorder-masker.md#13-decisions-and-open-items) #6 |
 | **Status** | Draft for CTO review |
 
-(File 04 is reserved for the recording session runbook, PR D2.)
-
 The recorder and the signer core both hard-block DEACTIVE and `CLOSED`, with no flag that lifts the block. A manual `CLOSED` is not planned in S2.
 
 **It cannot be undone.** SIMs are not recycled, and MSISDNs and IPs go into 60-day quarantine. Each DEACTIVE of an SBD line releases its IMEI, which frees test inventory (Annex E §1.4). No agent ever asks for a DEACTIVE: a plan, PR or message that asks for one, or names a target, is rejected.

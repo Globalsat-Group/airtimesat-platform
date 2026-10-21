@@ -42,14 +42,18 @@ from airtimesat_platform.common.secrets import (
     SecretsProvider,
     SecretValue,
 )
-from airtimesat_platform.gateway.endpoints_sitest import Endpoint, endpoint_url
+
+# Endpoint and TransportTimeoutError are re-exported: the port's call takes the one and
+# raises the other, and the recorder may import nothing else from the gateway.
+from airtimesat_platform.gateway.endpoints_sitest import Endpoint as Endpoint
+from airtimesat_platform.gateway.endpoints_sitest import endpoint_url
 from airtimesat_platform.gateway.envelope import AuthFields, build_envelope
 from airtimesat_platform.gateway.errors import (
     RefusedError,
     ResponseError,
     SigningError,
-    TransportTimeoutError,
 )
+from airtimesat_platform.gateway.errors import TransportTimeoutError as TransportTimeoutError
 from airtimesat_platform.gateway.faults import OUTCOME_OK, raise_if_throttled, read_reply
 from airtimesat_platform.gateway.signing import sign, utc_timestamp
 from airtimesat_platform.gateway.sitest_guard import (
