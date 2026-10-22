@@ -9,7 +9,6 @@ from airtimesat_platform.masker.errors import FieldMapError, MaskingError
 from airtimesat_platform.masker.fieldmap.loader import (
     build_field_map,
     load_generated,
-    packaged_overrides,
 )
 from airtimesat_platform.masker.fieldmap.model import (
     Direction,
@@ -83,15 +82,6 @@ def test_keep_proposals_have_no_effect_until_adopted() -> None:
     assert entry.treatment is Treatment.UNCLASSIFIED
     assert [e.path for e in field_map.keep_proposals()] == ["opResponse/value"]
     assert len(field_map.unclassified()) == 1
-
-
-def test_packaged_overrides_are_empty_so_everything_is_unclassified(
-    map_texts: tuple[str, str],
-) -> None:
-    generated, _ = map_texts
-    field_map, templates = build_field_map(generated, packaged_overrides())
-    assert templates == []
-    assert len(field_map.unclassified()) == len(field_map.entries)
 
 
 @pytest.mark.parametrize(

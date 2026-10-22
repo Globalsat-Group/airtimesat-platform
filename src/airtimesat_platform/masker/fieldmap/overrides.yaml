@@ -16,7 +16,608 @@
 # Templates (treatment F) are added by the CTO only, never by agents, and never copied
 # from the catalog: {id: TPL-001, text: "... {CONTRACT} ..."} with typed slots.
 #
-# Empty until the SITEST WSDL is harvested (design §10.2 step 1).
+# Scope (S2 overrides PR): every path of the operations of the first recording plan
+# (getSystemStatus on both endpoints, which share one set of paths; getIwsVersion;
+# getIwsReportVersion; authenticatedPing; accountSearch), getIwsRequests for the second
+# plan, and the SOAP fault paths under operation "*". Every other operation stays
+# UNCLASSIFIED. Reasons name the IWS catalog field and the design §3.1 row; they copy no
+# catalog text.
+#
+# Kept timestamps (open point): the recorder adds the signed request timestamp to the call's
+# known values, and known values are checked on kept leaves too. A kept timestamp that IWS
+# writes in the signer's exact format, within the second the request was signed (cbrmTime,
+# requestedTs and any later one), blocks the call with KNOWN_VALUE. That block is a
+# timestamp collision, not a leak, and it fails closed; an engine or recorder change, not
+# this map, should stop it.
 format: airtimesat-overrides/1
-entries: []
+entries:
+  # ---- getSystemStatus
+  - operation: "getSystemStatus"
+    direction: request
+    path: "request"
+    treatment: KEEP
+    reason: "Empty request body: authentication fields only, which the signer core adds"
+  - operation: "getSystemStatus"
+    direction: response
+    path: "getSystemStatusResponse"
+    treatment: KEEP
+    reason: "Container"
+  - operation: "getSystemStatus"
+    direction: response
+    path: "getSystemStatusResponse/response"
+    treatment: KEEP
+    reason: "Container"
+  - operation: "getSystemStatus"
+    direction: response
+    path: "getSystemStatusResponse/response/message"
+    treatment: F
+    reason: "iwsResponseImpl message: IWS-written text that may echo request values (design §3.1 Free text, §4.4); F, templates are the CTO's"
+  - operation: "getSystemStatus"
+    direction: response
+    path: "getSystemStatusResponse/response/status"
+    treatment: KEEP
+    reason: "Container (systemStatusImpl)"
+  - operation: "getSystemStatus"
+    direction: response
+    path: "getSystemStatusResponse/response/status/cbrmTime"
+    treatment: KEEP
+    reason: "systemStatusImpl.cbrmTime: IWS system clock, a timestamp; not an identifier. See the kept-timestamp note in the header"
+  - operation: "getSystemStatus"
+    direction: response
+    path: "getSystemStatusResponse/response/status/openForBusiness"
+    treatment: KEEP
+    reason: "systemStatusImpl.openForBusiness: a TRUE/FALSE flag"
+  - operation: "getSystemStatus"
+    direction: response
+    path: "getSystemStatusResponse/response/status/maintenanceOccurring"
+    treatment: KEEP
+    reason: "systemStatusImpl.maintenanceOccurring: a TRUE/FALSE flag"
+  - operation: "getSystemStatus"
+    direction: response
+    path: "getSystemStatusResponse/response/status/outageReason"
+    treatment: F
+    reason: "systemStatusImpl.outageReason: system free text (design §3.1 Free text: outageReason; §4.4 system descriptions get F)"
+  - operation: "getSystemStatus"
+    direction: response
+    path: "getSystemStatusResponse/response/status/iwsVersion"
+    treatment: KEEP
+    operational: true
+    reason: "systemStatusImpl.iwsVersion: a version string; operational so a dotted version does not trip the IPv4 rule (design §8.4, §8.5 #15)"
+  - operation: "getSystemStatus"
+    direction: response
+    path: "getSystemStatusResponse/response/status/wsdlRevision"
+    treatment: KEEP
+    operational: true
+    reason: "systemStatusImpl.wsdlRevision: a WSDL revision string; operational as a version (design §8.4)"
+  - operation: "getSystemStatus"
+    direction: response
+    path: "getSystemStatusResponse/response/status/obsolete"
+    treatment: KEEP
+    reason: "systemStatusImpl.obsolete: a TRUE/FALSE flag"
+  - operation: "getSystemStatus"
+    direction: response
+    path: "getSystemStatusResponse/response/status/affectedElements"
+    treatment: KEEP
+    reason: "Container"
+  - operation: "getSystemStatus"
+    direction: response
+    path: "getSystemStatusResponse/response/status/affectedElements/affectedElement"
+    treatment: KEEP
+    reason: "systemStatusImpl.affectedElements: names of IWS components that are down, a system code; detectors still run on it"
+  - operation: "getSystemStatus"
+    direction: response
+    path: "getSystemStatusResponse/response/status/outageScheduleItems"
+    treatment: KEEP
+    reason: "Container"
+  - operation: "getSystemStatus"
+    direction: response
+    path: "getSystemStatusResponse/response/status/outageScheduleItems/outageScheduleItem"
+    treatment: KEEP
+    reason: "Container (outageScheduleItemImpl)"
+  - operation: "getSystemStatus"
+    direction: response
+    path: "getSystemStatusResponse/response/status/outageScheduleItems/outageScheduleItem/outageId"
+    treatment: KEEP
+    operational: true
+    reason: "outageScheduleItemImpl.outageId: an IWS operational ID of an outage, not of a person (design §3.1 Contract and account IDs note; §8.4)"
+  - operation: "getSystemStatus"
+    direction: response
+    path: "getSystemStatusResponse/response/status/outageScheduleItems/outageScheduleItem/startTime"
+    treatment: KEEP
+    reason: "outageScheduleItemImpl.startTime: a timestamp"
+  - operation: "getSystemStatus"
+    direction: response
+    path: "getSystemStatusResponse/response/status/outageScheduleItems/outageScheduleItem/endTime"
+    treatment: KEEP
+    reason: "outageScheduleItemImpl.endTime: a timestamp"
+  - operation: "getSystemStatus"
+    direction: response
+    path: "getSystemStatusResponse/response/status/outageScheduleItems/outageScheduleItem/name"
+    treatment: F
+    reason: "outageScheduleItemImpl.name: system-written title; stricter F rather than KEEP because it is free text (design §4.4)"
+  - operation: "getSystemStatus"
+    direction: response
+    path: "getSystemStatusResponse/response/status/outageScheduleItems/outageScheduleItem/description"
+    treatment: F
+    reason: "outageScheduleItemImpl.description: system free text (design §3.1 Free text: outage description; §4.4)"
+  - operation: "getSystemStatus"
+    direction: response
+    path: "getSystemStatusResponse/response/status/outageScheduleItems/outageScheduleItem/emergency"
+    treatment: KEEP
+    reason: "outageScheduleItemImpl.emergency: a TRUE/FALSE flag"
+  - operation: "getSystemStatus"
+    direction: response
+    path: "getSystemStatusResponse/response/status/outageScheduleItems/outageScheduleItem/status"
+    treatment: KEEP
+    reason: "outageScheduleItemImpl status: outageStatusEnum"
+  - operation: "getSystemStatus"
+    direction: response
+    path: "getSystemStatusResponse/response/status/outageScheduleItems/outageScheduleItem/affectedElements"
+    treatment: KEEP
+    reason: "Container"
+  - operation: "getSystemStatus"
+    direction: response
+    path: "getSystemStatusResponse/response/status/outageScheduleItems/outageScheduleItem/affectedElements/affectedElement"
+    treatment: KEEP
+    reason: "outageScheduleItemImpl.affectedElements: IWS component names, a system code; detectors still run on it"
+  # ---- getIwsVersion
+  - operation: "getIwsVersion"
+    direction: request
+    path: "request"
+    treatment: KEEP
+    reason: "Empty request body: authentication fields only, which the signer core adds"
+  - operation: "getIwsVersion"
+    direction: response
+    path: "getIwsVersionResponse"
+    treatment: KEEP
+    reason: "Container"
+  - operation: "getIwsVersion"
+    direction: response
+    path: "getIwsVersionResponse/response"
+    treatment: KEEP
+    reason: "Container"
+  - operation: "getIwsVersion"
+    direction: response
+    path: "getIwsVersionResponse/response/message"
+    treatment: F
+    reason: "iwsResponseImpl message: IWS-written text that may echo request values (design §3.1 Free text, §4.4); F, templates are the CTO's"
+  - operation: "getIwsVersion"
+    direction: response
+    path: "getIwsVersionResponse/response/version"
+    treatment: KEEP
+    operational: true
+    reason: "getProjectVersion version: the IWS version string; operational as a version (design §8.4, §8.5 #15)"
+  # ---- getIwsReportVersion
+  - operation: "getIwsReportVersion"
+    direction: request
+    path: "request"
+    treatment: KEEP
+    reason: "Empty request body: authentication fields only, which the signer core adds"
+  - operation: "getIwsReportVersion"
+    direction: response
+    path: "getIwsReportVersionResponse"
+    treatment: KEEP
+    reason: "Container"
+  - operation: "getIwsReportVersion"
+    direction: response
+    path: "getIwsReportVersionResponse/response"
+    treatment: KEEP
+    reason: "Container"
+  - operation: "getIwsReportVersion"
+    direction: response
+    path: "getIwsReportVersionResponse/response/message"
+    treatment: F
+    reason: "iwsResponseImpl message: IWS-written text that may echo request values (design §3.1 Free text, §4.4); F, templates are the CTO's"
+  - operation: "getIwsReportVersion"
+    direction: response
+    path: "getIwsReportVersionResponse/response/version"
+    treatment: KEEP
+    operational: true
+    reason: "getProjectVersion version: the IWS version string; operational as a version (design §8.4, §8.5 #15)"
+  # ---- authenticatedPing
+  - operation: "authenticatedPing"
+    direction: request
+    path: "request"
+    treatment: KEEP
+    reason: "Empty request body: authentication fields only, which the signer core adds"
+  - operation: "authenticatedPing"
+    direction: response
+    path: "authenticatedPingResponse"
+    treatment: KEEP
+    reason: "Container"
+  - operation: "authenticatedPing"
+    direction: response
+    path: "authenticatedPingResponse/response"
+    treatment: KEEP
+    reason: "Container"
+  - operation: "authenticatedPing"
+    direction: response
+    path: "authenticatedPingResponse/response/message"
+    treatment: F
+    reason: "iwsResponseImpl message: IWS-written text that may echo request values (design §3.1 Free text, §4.4); F, templates are the CTO's"
+  # ---- accountSearch
+  - operation: "accountSearch"
+    direction: request
+    path: "request"
+    treatment: KEEP
+    reason: "Container"
+  - operation: "accountSearch"
+    direction: request
+    path: "request/serviceType"
+    treatment: KEEP
+    reason: "accountSearch.serviceType: serviceTypeEnum"
+  - operation: "accountSearch"
+    direction: request
+    path: "request/status"
+    treatment: KEEP
+    reason: "accountSearch.status: accountStatusEnum"
+  - operation: "accountSearch"
+    direction: request
+    path: "request/secondarySvcType"
+    treatment: KEEP
+    reason: "accountSearch.secondarySvcType: secondarySvcTypeEnum"
+  - operation: "accountSearch"
+    direction: request
+    path: "request/secondarySvcStatus"
+    treatment: KEEP
+    reason: "accountSearch.secondarySvcStatus: secondarySvcStatusEnum"
+  - operation: "accountSearch"
+    direction: request
+    path: "request/dateSearchType"
+    treatment: KEEP
+    reason: "accountSearch.dateSearchType: a date range enum"
+  - operation: "accountSearch"
+    direction: request
+    path: "request/startDate"
+    treatment: KEEP
+    reason: "accountSearch.startDate: a date on the activation date; not an identifier, and the request check still scans it"
+  - operation: "accountSearch"
+    direction: request
+    path: "request/endDate"
+    treatment: KEEP
+    reason: "accountSearch.endDate: a date on the activation date; not an identifier, and the request check still scans it"
+  - operation: "accountSearch"
+    direction: request
+    path: "request/filterType"
+    treatment: KEEP
+    reason: "accountSearch.filterType: subscriberAccountSearchTypeEnum; the typing sibling of filterValue (design §3.2)"
+  - operation: "accountSearch"
+    direction: request
+    path: "request/filterCond"
+    treatment: KEEP
+    reason: "accountSearch.filterCond: a match condition enum; the allowlist accepts EQUALS only (design §5.5 step 8)"
+  - operation: "accountSearch"
+    direction: request
+    path: "request/filterValue"
+    treatment: TYPED
+    typed_by:
+      sibling: filterType
+      values:
+        ACCOUNT_NUMBER: "T-NUM:CONTRACT"
+        MSISDN: "T-NUM:MSISDN"
+        MSISDNB: "T-NUM:OTHER_NUMBER"
+        MSISDNC: "T-NUM:OTHER_NUMBER"
+        SIM_SERIAL_NUMBER: "T-NUM:ICCID"
+        IMSI: "T-NUM:IMSI"
+        CAPCODE: "T-NUM:CAPCODE"
+        IMEI: "T-NUM:IMEI"
+        LOCAL: "T-NUM:OTHER_NUMBER"
+        IP_ADDRESS: "T-IP"
+        PROVIDER_REFERENCE: "T-STR:REF"
+        VESSEL_NAME: "T-STR:VESSEL"
+        MMSI: "T-NUM:MMSI"
+        ISDNA: "T-NUM:OTHER_NUMBER"
+        BURST_SERVICE: "T-STR:NAME"
+        ATS_ICAO: "T-STR:ID"
+        ATS_REG_TAIL_NUMBER: "T-STR:ID"
+        SHARED_GROUP: "T-STR:ID"
+        PTT_TG: "T-STR:ID"
+        IMO: "T-NUM:IMO"
+    reason: "accountSearch.filterValue, typed by filterType (design §3.2). Identifier filter types map to their §3.1 rows. Refused (left out, so TYPING_UNKNOWN refuses a request and a logged value falls back to pattern detection and a generic T-STR): MODEL, VERTICAL and VESSEL_TYPE (catalog values, but a KEEP target is not checked for wildcards and the allowlist has no no_wildcards rule for accountSearch, so * or % would list accounts SP-wide against design §5.5 step 8 and §8.5 #16, #18; re-add them as KEEP once a reviewed recorder PR adds no_wildcards for filterValue), SMART (design §5.3), DELIVERY_DEST and MT_FILTER (the value may be an IMEI, an email, a host or an IP, so one type cannot be named; §3.2), SECONDARY_SVC and VESSEL_LINK (in the WSDL only, their value is not documented)"
+  - operation: "accountSearch"
+    direction: request
+    path: "request/limit"
+    treatment: KEEP
+    operational: true
+    reason: "accountSearch.limit: a page size, capped by the allowlist; operational as a size"
+  - operation: "accountSearch"
+    direction: request
+    path: "request/startRow"
+    treatment: KEEP
+    operational: true
+    reason: "accountSearch.startRow: a row offset, capped by the allowlist; operational as a count"
+  - operation: "accountSearch"
+    direction: response
+    path: "accountSearchResponse"
+    treatment: KEEP
+    reason: "Container"
+  - operation: "accountSearch"
+    direction: response
+    path: "accountSearchResponse/response"
+    treatment: KEEP
+    reason: "Container"
+  - operation: "accountSearch"
+    direction: response
+    path: "accountSearchResponse/response/message"
+    treatment: F
+    reason: "iwsResponseImpl message: IWS-written text that may echo request values (design §3.1 Free text, §4.4); F, templates are the CTO's"
+  - operation: "accountSearch"
+    direction: response
+    path: "accountSearchResponse/response/totalNumberOfRecords"
+    treatment: KEEP
+    operational: true
+    reason: "accountSearch.totalNumberOfRecords: a count"
+  - operation: "accountSearch"
+    direction: response
+    path: "accountSearchResponse/response/subscribers"
+    treatment: KEEP
+    reason: "Container"
+  - operation: "accountSearch"
+    direction: response
+    path: "accountSearchResponse/response/subscribers/subscriber"
+    treatment: KEEP
+    reason: "Container (accountSearchReportImpl); one row per account"
+  - operation: "accountSearch"
+    direction: response
+    path: "accountSearchResponse/response/subscribers/subscriber/accountNumber"
+    treatment: T-NUM
+    type: CONTRACT
+    reason: "accountSearchReportImpl.accountNumber: the SUB- contract number (design §3.1 Contract and account IDs)"
+  - operation: "accountSearch"
+    direction: response
+    path: "accountSearchResponse/response/subscribers/subscriber/serviceType"
+    treatment: KEEP
+    reason: "accountSearchReportImpl.serviceType: the service type name, a catalog value; detectors still run on it"
+  - operation: "accountSearch"
+    direction: response
+    path: "accountSearchResponse/response/subscribers/subscriber/details"
+    treatment: T-STR
+    type: VALUE
+    reason: "accountSearchReportImpl.details: an identifier whose type follows the request's filterType or the service type (design §3.2; ICCID, IMEI, talkgroup ID, Burst service name, capcode, vessel name and others). The engine types a field by a sibling in the same element only, and the filterType is in the request, so no single type is safe: stricter generic reversible T-STR, which masks every form. Limit: no request field resolves the VALUE label, so a details surrogate cannot be sent in a later filterValue (NOT_A_SURROGATE), and the same ICCID or IMEI gets a VALUE vault row apart from its iccid or imei surrogate; plans chain through accountNumber, iccid or imei. Open point: a request-aware typing rule in the engine, or accepting VALUE surrogates for the string-typed filter types"
+  - operation: "accountSearch"
+    direction: response
+    path: "accountSearchResponse/response/subscribers/subscriber/activationDate"
+    treatment: KEEP
+    reason: "accountSearchReportImpl.activationDate: a date"
+  - operation: "accountSearch"
+    direction: response
+    path: "accountSearchResponse/response/subscribers/subscriber/lastUpdated"
+    treatment: KEEP
+    reason: "accountSearchReportImpl.lastUpdated: a system timestamp"
+  - operation: "accountSearch"
+    direction: response
+    path: "accountSearchResponse/response/subscribers/subscriber/accountStatus"
+    treatment: KEEP
+    reason: "accountSearchReportImpl.accountStatus: accountStatusEnum"
+  - operation: "accountSearch"
+    direction: response
+    path: "accountSearchResponse/response/subscribers/subscriber/accountType"
+    treatment: T-STR
+    type: ID
+    reason: "accountSearchReportImpl.accountType: an integer in the WSDL only, not in the catalog, so its meaning is unknown. Stricter: reversible T-STR (a 9-digit surrogate on xs:int) rather than KEEP; the CTO may change it to KEEP once a recording shows it is a type code"
+  - operation: "accountSearch"
+    direction: response
+    path: "accountSearchResponse/response/subscribers/subscriber/planName"
+    treatment: KEEP
+    reason: "accountSearchReportImpl.planName: a catalog plan name (design §3.1 Organization row: catalog names are kept); detectors and cross-call known values still run on it"
+  - operation: "accountSearch"
+    direction: response
+    path: "accountSearchResponse/response/subscribers/subscriber/iccid"
+    treatment: T-NUM
+    type: ICCID
+    reason: "accountSearchReportImpl.iccid (design §3.1 ICCID)"
+  - operation: "accountSearch"
+    direction: response
+    path: "accountSearchResponse/response/subscribers/subscriber/imei"
+    treatment: T-NUM
+    type: IMEI
+    reason: "accountSearchReportImpl.imei (design §3.1 IMEI)"
+  - operation: "accountSearch"
+    direction: response
+    path: "accountSearchResponse/response/subscribers/subscriber/spReference"
+    treatment: T-STR
+    type: REF
+    reason: "accountSearchReportImpl.spReference: provider reference, searchable, may hold customer names (design §3.1 Free text: spReference; §4.4)"
+  # ---- getIwsRequests
+  - operation: "getIwsRequests"
+    direction: request
+    path: "request"
+    treatment: KEEP
+    reason: "Container"
+  - operation: "getIwsRequests"
+    direction: request
+    path: "request/iwsOperation"
+    treatment: KEEP
+    reason: "getIwsRequests.iwsOperation: names an IWS operation (or a request ID), not a person (design §13 #32); the request check still scans it"
+  - operation: "getIwsRequests"
+    direction: request
+    path: "request/startDate"
+    treatment: KEEP
+    reason: "getIwsRequests.startDate: window start, an ISO 8601 timestamp the allowlist checks"
+  - operation: "getIwsRequests"
+    direction: request
+    path: "request/endDate"
+    treatment: KEEP
+    reason: "getIwsRequests.endDate: window end, an ISO 8601 timestamp the allowlist checks"
+  - operation: "getIwsRequests"
+    direction: request
+    path: "request/limit"
+    treatment: KEEP
+    operational: true
+    reason: "getIwsRequests.limit: a page size, capped by the allowlist; operational as a size"
+  - operation: "getIwsRequests"
+    direction: request
+    path: "request/startRow"
+    treatment: KEEP
+    operational: true
+    reason: "getIwsRequests.startRow: a row offset, capped by the allowlist; operational as a count"
+  - operation: "getIwsRequests"
+    direction: response
+    path: "getIwsRequestsResponse"
+    treatment: KEEP
+    reason: "Container"
+  - operation: "getIwsRequests"
+    direction: response
+    path: "getIwsRequestsResponse/response"
+    treatment: KEEP
+    reason: "Container"
+  - operation: "getIwsRequests"
+    direction: response
+    path: "getIwsRequestsResponse/response/message"
+    treatment: F
+    reason: "iwsResponseImpl message: IWS-written text that may echo request values (design §3.1 Free text, §4.4); F, templates are the CTO's"
+  - operation: "getIwsRequests"
+    direction: response
+    path: "getIwsRequestsResponse/response/iwsLogs"
+    treatment: KEEP
+    reason: "Container"
+  - operation: "getIwsRequests"
+    direction: response
+    path: "getIwsRequestsResponse/response/iwsLogs/iwsLog"
+    treatment: KEEP
+    reason: "Container (iwsLogImpl); the recorder removes entries whose caller is not rec. before masking (design §5.3)"
+  - operation: "getIwsRequests"
+    direction: response
+    path: "getIwsRequestsResponse/response/iwsLogs/iwsLog/requestId"
+    treatment: KEEP
+    operational: true
+    reason: "iwsLogImpl.requestId: an IWS operational ID of a request (design §3.1 Contract and account IDs note; §8.4)"
+  - operation: "getIwsRequests"
+    direction: response
+    path: "getIwsRequestsResponse/response/iwsLogs/iwsLog/requestUser"
+    treatment: P-ONE
+    type: USER
+    reason: "iwsLogImpl.requestUser: an IWS login (design §3.1 Person names and logins, P-ONE). For recorder entries it holds the iwsUsername, which §3.1 gives C, but the recorder passes no constant for it, so C would block every entry with CONSTANT_UNKNOWN; P-ONE is one-way, and the injected username is also a known value for the call"
+  - operation: "getIwsRequests"
+    direction: response
+    path: "getIwsRequestsResponse/response/iwsLogs/iwsLog/requestedOperation"
+    treatment: KEEP
+    reason: "iwsLogImpl.requestedOperation: an IWS operation name; the embedded rules' operation sibling, which must be KEEP"
+  - operation: "getIwsRequests"
+    direction: response
+    path: "getIwsRequestsResponse/response/iwsLogs/iwsLog/caller"
+    treatment: P-ONE
+    type: USER
+    reason: "iwsLogImpl.caller: a caller login (design §3.1 Person names and logins, P-ONE); the recorder's own rec.RP-YYYY-NNN value is kept by the caller keep (design §13 #29)"
+  - operation: "getIwsRequests"
+    direction: response
+    path: "getIwsRequestsResponse/response/iwsLogs/iwsLog/requestedTs"
+    treatment: KEEP
+    reason: "iwsLogImpl.requestedTs: a timestamp. See the kept-timestamp note in the header"
+  - operation: "getIwsRequests"
+    direction: response
+    path: "getIwsRequestsResponse/response/iwsLogs/iwsLog/errorMessage"
+    treatment: F
+    reason: "iwsLogImpl.errorMessage: IWS error text that may echo request values (design §3.1 Free text: errorMessage; §4.4)"
+  - operation: "getIwsRequests"
+    direction: response
+    path: "getIwsRequestsResponse/response/iwsLogs/iwsLog/request"
+    treatment: D
+    reason: "iwsLogImpl.request: the logged request as escaped XML (design §3.1 Embedded payloads; §4.4). Stricter D (an optional string, written as REDACTED) rather than N with an embedded rule: the engine's embedded walk masks the leaves under the logged request element but not text that follows a child element (its tail), so only the pattern detectors would see such text, and a name there would pass. Plan 002 needs only caller, requestId and requestedOperation, which are classified on their own. Open point: N can return after an engine change walks or drops every tail in an embedded payload"
+  - operation: "getIwsRequests"
+    direction: response
+    path: "getIwsRequestsResponse/response/iwsLogs/iwsLog/response"
+    treatment: D
+    reason: "iwsLogImpl.response: the logged response as escaped XML (design §3.1 Embedded payloads; §4.4). Stricter D (an optional string, written as REDACTED) rather than N: a logged getIwsRequests response holds the log IWS returned to the recorder before the caller filter, so other callers' entries would be masked rather than removed (against design §5.3, §8.5 #19), and the caller filter sees the escaped payload as text. The recorder already writes each call's own masked response, so the logged copy adds nothing. D also avoids the N output rescan, which blocks a logged version or long ID. Open point: N can return only after an engine change drops an embedded getIwsRequests or getIwsRequest payload or runs the caller filter on nested logs"
+  # ---- *
+  - operation: "*"
+    direction: fault
+    path: "Fault"
+    treatment: KEEP
+    reason: "Container (SOAP 1.2 Fault)"
+  - operation: "*"
+    direction: fault
+    path: "Fault/Code"
+    treatment: KEEP
+    reason: "Container"
+  - operation: "*"
+    direction: fault
+    path: "Fault/Code/Value"
+    treatment: KEEP
+    reason: "SOAP fault code, a fixed QName such as a Sender or Receiver code; detectors still run on it"
+  - operation: "*"
+    direction: fault
+    path: "Fault/Code/Subcode"
+    treatment: KEEP
+    reason: "Container"
+  - operation: "*"
+    direction: fault
+    path: "Fault/Code/Subcode/Value"
+    treatment: KEEP
+    reason: "SOAP fault subcode, a QName; detectors still run on it"
+  - operation: "*"
+    direction: fault
+    path: "Fault/Reason"
+    treatment: KEEP
+    reason: "Container"
+  - operation: "*"
+    direction: fault
+    path: "Fault/Reason/Text"
+    treatment: F
+    reason: "SOAP fault reason text: IWS echoes request values in error text (design §3.1 Free text: SOAP fault reason; §4.4, §8.5 #1)"
+  - operation: "*"
+    direction: fault
+    path: "Fault/Detail"
+    treatment: KEEP
+    reason: "Container"
+  - operation: "*"
+    direction: fault
+    path: "Fault/Detail/AuthorizationException"
+    treatment: KEEP
+    reason: "Container (IWS exception detail)"
+  - operation: "*"
+    direction: fault
+    path: "Fault/Detail/AuthorizationException/causedBy"
+    treatment: F
+    reason: "AuthorizationException.causedBy: undocumented text about the cause; stricter F (design §3.1 Free text: SOAP fault detail text)"
+  - operation: "*"
+    direction: fault
+    path: "Fault/Detail/AuthorizationException/errorCode"
+    treatment: KEEP
+    reason: "AuthorizationException.errorCode: errorCodeEnum"
+  - operation: "*"
+    direction: fault
+    path: "Fault/Detail/AuthorizationException/message"
+    treatment: F
+    reason: "AuthorizationException.message: fault detail text (design §3.1 Free text: SOAP fault detail text; §8.5 #1)"
+  - operation: "*"
+    direction: fault
+    path: "Fault/Detail/IWSException"
+    treatment: KEEP
+    reason: "Container (IWS exception detail)"
+  - operation: "*"
+    direction: fault
+    path: "Fault/Detail/IWSException/causedBy"
+    treatment: F
+    reason: "IWSException.causedBy: undocumented text about the cause; stricter F (design §3.1 Free text: SOAP fault detail text)"
+  - operation: "*"
+    direction: fault
+    path: "Fault/Detail/IWSException/errorCode"
+    treatment: KEEP
+    reason: "IWSException.errorCode: errorCodeEnum"
+  - operation: "*"
+    direction: fault
+    path: "Fault/Detail/IWSException/message"
+    treatment: F
+    reason: "IWSException.message: fault detail text (design §3.1 Free text: SOAP fault detail text; §8.5 #1)"
+  - operation: "*"
+    direction: fault
+    path: "Fault/Detail/InvocationTargetException"
+    treatment: KEEP
+    reason: "Container (Java exception detail)"
+  - operation: "*"
+    direction: fault
+    path: "Fault/Detail/InvocationTargetException/message"
+    treatment: F
+    reason: "InvocationTargetException.message: exception text (design §3.1 Free text: SOAP fault detail text)"
+  - operation: "*"
+    direction: fault
+    path: "Fault/Detail/NoSuchMethodException"
+    treatment: KEEP
+    reason: "Container (Java exception detail)"
+  - operation: "*"
+    direction: fault
+    path: "Fault/Detail/NoSuchMethodException/message"
+    treatment: F
+    reason: "NoSuchMethodException.message: exception text (design §3.1 Free text: SOAP fault detail text)"
 templates: []

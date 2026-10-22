@@ -909,10 +909,26 @@ def test_python_dash_m(
         check=False,
         cwd=tmp_path,
     )
-    assert checked.returncode == 1
-    # The real map has every path UNCLASSIFIED until the overrides classify them.
-    assert checked.stdout == "REFUSED plan.yaml UNCLASSIFIED_ELEMENT calls[0]/request\n"
+    # The packaged overrides classify accountSearch (S2 overrides PR), so the plan passes.
+    assert checked.returncode == 0
+    assert re.fullmatch(r"OK RP-2026-\d{3} [0-9a-f]{64}\n", checked.stdout)
     assert checked.stderr == ""
+    # An operation the overrides leave UNCLASSIFIED is still refused by the real map.
+    unclassified = build(
+        [make_call("vessel", "getVessel", f"<request><id>{surrogate('ID')}</id></request>")],
+        expires_at=expires,
+    )
+    (tmp_path / "plan.yaml").write_text(unclassified, encoding="utf-8")
+    refused = subprocess.run(  # noqa: S603 - as above
+        [*command, "check", "plan.yaml"],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=tmp_path,
+    )
+    assert refused.returncode == 1
+    assert refused.stdout == "REFUSED plan.yaml UNCLASSIFIED_ELEMENT calls[0]/request\n"
+    assert refused.stderr == ""
     usage = subprocess.run(command, capture_output=True, text=True, check=False)  # noqa: S603 - as above
     assert usage.returncode == 2
     assert usage.stdout == ""
