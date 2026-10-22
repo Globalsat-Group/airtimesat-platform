@@ -523,6 +523,9 @@ class _Runner:
             )
         )
         self.stopped = code
+        # IWS's outcome (ok, an errorCode enum value or unknown; never text) when it answered,
+        # so a blocked fault still says what kind of fault it was.
+        outcome = {"outcome": self.answered["outcome"]} if "outcome" in self.answered else {}
         self.log.emit(
             "CALL_BLOCKED" if blocks else "CALL_FAILED",
             call_id=call.id,
@@ -531,6 +534,7 @@ class _Runner:
             path=path,
             detector=detector,
             incident=incident,
+            **outcome,
         )
 
     # ------------------------------------------------------------ before git

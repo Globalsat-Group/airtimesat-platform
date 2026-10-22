@@ -388,3 +388,69 @@ def test_engine_refuses_surrogates_that_do_not_fit_numeric_types(
     with pytest.raises(MaskingError) as info:
         MaskingEngine(field_map, Vault(InMemoryVaultStore(), keys_factory(1)))
     assert info.value.code == "FIELDMAP_TYPE_MISMATCH"
+
+
+# allow_nil: accepted on an optional SOAP-fault leaf only (IWS writes null fault-bean fields as
+# xsi:nil although the WSDL does not declare them nillable).
+FAULT_ROOT = '{operation: "*", direction: fault, path: Fault, xsd_type: complex}'
+FAULT_ROOT_KEEP = '{operation: "*", direction: fault, path: Fault, treatment: KEEP}'
+
+
+def fault_leaf(extra: str = "", xsd_type: str = "string") -> str:
+    return f'{{operation: "*", direction: fault, path: Fault/text, xsd_type: {xsd_type}{extra}}}'
+
+
+def fault_override(rest: str) -> str:
+    return '{operation: "*", direction: fault, path: Fault/text, ' + rest + "}"
+
+
+def test_allow_nil_makes_an_optional_fault_leaf_nillable() -> None:
+    field_map, _ = build_field_map(
+        gen(FAULT_ROOT, fault_leaf(", min_occurs: 0")),
+        ovr(FAULT_ROOT_KEEP, fault_override("treatment: F, allow_nil: true")),
+    )
+    entry = field_map.lookup("*", Direction.FAULT, "Fault/text")
+    assert entry is not None
+    assert entry.nillable
+    without, _ = build_field_map(
+        gen(FAULT_ROOT, fault_leaf(", min_occurs: 0")),
+        ovr(FAULT_ROOT_KEEP, fault_override("treatment: F")),
+    )
+    plain = without.lookup("*", Direction.FAULT, "Fault/text")
+    assert plain is not None
+    assert not plain.nillable
+
+
+@pytest.mark.parametrize(
+    ("generated", "overrides"),
+    [
+        pytest.param(
+            gen(ROOT, leaf("string", ", min_occurs: 0")),
+            ovr(ROOT_KEEP, leaf_override("treatment: F, allow_nil: true")),
+            id="response-leaf",
+        ),
+        pytest.param(
+            gen(FAULT_ROOT, fault_leaf()),
+            ovr(FAULT_ROOT_KEEP, fault_override("treatment: F, allow_nil: true")),
+            id="required-fault-leaf",
+        ),
+        pytest.param(
+            gen(FAULT_ROOT, fault_leaf(", min_occurs: 0", "complex")),
+            ovr(FAULT_ROOT_KEEP, fault_override("treatment: KEEP, allow_nil: true")),
+            id="complex-fault-element",
+        ),
+    ],
+)
+def test_allow_nil_is_refused_anywhere_else(generated: str, overrides: str) -> None:
+    with pytest.raises(FieldMapError) as info:
+        build_field_map(generated, overrides)
+    assert info.value.code == "FIELDMAP_BAD_ALLOW_NIL"
+
+
+def test_allow_nil_must_be_a_boolean() -> None:
+    with pytest.raises(FieldMapError) as info:
+        build_field_map(
+            gen(FAULT_ROOT, fault_leaf(", min_occurs: 0")),
+            ovr(FAULT_ROOT_KEEP, fault_override('treatment: F, allow_nil: "yes"')),
+        )
+    assert info.value.code == "FIELDMAP_SCHEMA"

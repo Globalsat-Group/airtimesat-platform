@@ -11,6 +11,8 @@
 #   typed_by    {sibling: <element>, values: {<enum value>: "T-NUM:IMEI" | "T-EMAIL" | ...}}
 #   embedded    {format: xml, operation_from: <sibling element>, direction: request | response}
 #   literals    C only: values kept as they are (for example GLOBAL)
+#   allow_nil   true on an optional SOAP-fault leaf only: accept xsi:nil, which IWS writes for a
+#               null fault-bean field although the WSDL does not declare it nillable
 #   reason      free text for the reviewer; never a real value
 #
 # Templates (treatment F) are added by the CTO only, never by agents, and never copied
@@ -569,17 +571,20 @@ entries:
     direction: fault
     path: "Fault/Detail/AuthorizationException/causedBy"
     treatment: F
-    reason: "AuthorizationException.causedBy: undocumented text about the cause; stricter F (design §3.1 Free text: SOAP fault detail text)"
+    allow_nil: true
+    reason: "AuthorizationException.causedBy: undocumented text about the cause; stricter F (design §3.1 Free text: SOAP fault detail text). allow_nil: inferred from the fault-bean marshalling seen at IWSException/causedBy in the first live run (22 Oct 2026), where IWS wrote a null field as xsi:nil although the WSDL does not declare it nillable; a nil element carries no value"
   - operation: "*"
     direction: fault
     path: "Fault/Detail/AuthorizationException/errorCode"
     treatment: KEEP
-    reason: "AuthorizationException.errorCode: errorCodeEnum"
+    allow_nil: true
+    reason: "AuthorizationException.errorCode: errorCodeEnum. allow_nil: inferred from the fault-bean marshalling seen at IWSException/causedBy in the first live run (22 Oct 2026), where IWS wrote a null field as xsi:nil although the WSDL does not declare it nillable; a nil element carries no value"
   - operation: "*"
     direction: fault
     path: "Fault/Detail/AuthorizationException/message"
     treatment: F
-    reason: "AuthorizationException.message: fault detail text (design §3.1 Free text: SOAP fault detail text; §8.5 #1)"
+    allow_nil: true
+    reason: "AuthorizationException.message: fault detail text (design §3.1 Free text: SOAP fault detail text; §8.5 #1). allow_nil: inferred from the fault-bean marshalling seen at IWSException/causedBy in the first live run (22 Oct 2026), where IWS wrote a null field as xsi:nil although the WSDL does not declare it nillable; a nil element carries no value"
   - operation: "*"
     direction: fault
     path: "Fault/Detail/IWSException"
@@ -589,17 +594,20 @@ entries:
     direction: fault
     path: "Fault/Detail/IWSException/causedBy"
     treatment: F
-    reason: "IWSException.causedBy: undocumented text about the cause; stricter F (design §3.1 Free text: SOAP fault detail text)"
+    allow_nil: true
+    reason: "IWSException.causedBy: undocumented text about the cause; stricter F (design §3.1 Free text: SOAP fault detail text). allow_nil: observed in the first live run (22 Oct 2026): IWS wrote this null field as xsi:nil, although the WSDL does not declare it nillable; a nil element carries no value"
   - operation: "*"
     direction: fault
     path: "Fault/Detail/IWSException/errorCode"
     treatment: KEEP
-    reason: "IWSException.errorCode: errorCodeEnum"
+    allow_nil: true
+    reason: "IWSException.errorCode: errorCodeEnum. allow_nil: inferred from the fault-bean marshalling seen at IWSException/causedBy in the first live run (22 Oct 2026), where IWS wrote a null field as xsi:nil although the WSDL does not declare it nillable; a nil element carries no value"
   - operation: "*"
     direction: fault
     path: "Fault/Detail/IWSException/message"
     treatment: F
-    reason: "IWSException.message: fault detail text (design §3.1 Free text: SOAP fault detail text; §8.5 #1)"
+    allow_nil: true
+    reason: "IWSException.message: fault detail text (design §3.1 Free text: SOAP fault detail text; §8.5 #1). allow_nil: inferred from the fault-bean marshalling seen at IWSException/causedBy in the first live run (22 Oct 2026), where IWS wrote a null field as xsi:nil although the WSDL does not declare it nillable; a nil element carries no value"
   - operation: "*"
     direction: fault
     path: "Fault/Detail/InvocationTargetException"
@@ -609,7 +617,8 @@ entries:
     direction: fault
     path: "Fault/Detail/InvocationTargetException/message"
     treatment: F
-    reason: "InvocationTargetException.message: exception text (design §3.1 Free text: SOAP fault detail text)"
+    allow_nil: true
+    reason: "InvocationTargetException.message: exception text (design §3.1 Free text: SOAP fault detail text). allow_nil: inferred from the fault-bean marshalling seen at IWSException/causedBy in the first live run (22 Oct 2026), where IWS wrote a null field as xsi:nil although the WSDL does not declare it nillable; a nil element carries no value"
   - operation: "*"
     direction: fault
     path: "Fault/Detail/NoSuchMethodException"
@@ -619,5 +628,6 @@ entries:
     direction: fault
     path: "Fault/Detail/NoSuchMethodException/message"
     treatment: F
-    reason: "NoSuchMethodException.message: exception text (design §3.1 Free text: SOAP fault detail text)"
+    allow_nil: true
+    reason: "NoSuchMethodException.message: exception text (design §3.1 Free text: SOAP fault detail text). allow_nil: inferred from the fault-bean marshalling seen at IWSException/causedBy in the first live run (22 Oct 2026), where IWS wrote a null field as xsi:nil although the WSDL does not declare it nillable; a nil element carries no value"
 templates: []

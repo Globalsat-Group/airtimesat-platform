@@ -1026,3 +1026,97 @@ def test_every_operation_uses_the_shared_fault_paths(engine: MaskingEngine, oper
     )
     assert result.fault
     assert canary("CONTRACT", 22) not in result.body.decode()
+
+
+# ---------------------------------------------------------------- nil fault detail fields
+#
+# IWS marshals a null Java field of its fault beans as xsi:nil="true", although the WSDL
+# declares those fields optional and not nillable. The first live run (RP-2026-001, call
+# status-provisioning) blocked with NIL_NOT_ALLOWED at Fault/Detail/IWSException/causedBy.
+# Only these optional fault-detail leaves accept nil (overrides ``allow_nil``); a nil element
+# carries no value to mask. Every other nil still blocks.
+
+NIL = f'xmlns:xsi="{XSI}" xsi:nil="true"'
+DETAIL_FIELDS = {
+    "IWSException": ("causedBy", "errorCode", "message"),
+    "AuthorizationException": ("causedBy", "errorCode", "message"),
+    "InvocationTargetException": ("message",),
+    "NoSuchMethodException": ("message",),
+}
+NIL_CASES = [
+    pytest.param(name, (nil,), id=f"{name}-{nil}")
+    for name, fields in DETAIL_FIELDS.items()
+    for nil in fields
+] + [pytest.param(name, fields, id=f"{name}-all") for name, fields in DETAIL_FIELDS.items()]
+
+
+def _nil_detail(name: str, nil: tuple[str, ...], text: str = "Synthetic detail") -> str:
+    values = {"causedBy": text, "errorCode": "SYS", "message": text}
+    inner = "".join(
+        f"<{f} {NIL}/>" if f in nil else f"<{f}>{values[f]}</{f}>" for f in DETAIL_FIELDS[name]
+    )
+    return f'<tns:{name} xmlns:tns="{IWS}">{inner}</tns:{name}>'
+
+
+def _status_fault(engine: MaskingEngine, data: bytes) -> bytes:
+    call = engine.start_call("getSystemStatus", (USERNAME, SP_ACCOUNT))
+    return engine.mask_response(call, data).body
+
+
+@pytest.mark.parametrize(("exception", "nil"), NIL_CASES)
+def test_a_nil_fault_detail_field_is_kept_as_nil(
+    engine: MaskingEngine, exception: str, nil: tuple[str, ...]
+) -> None:
+    call = engine.start_call("getSystemStatus", (USERNAME, SP_ACCOUNT))
+    echo = f"Lookup failed for {canary('CONTRACT', 31)}"
+    result = engine.mask_response(call, fault(_nil_detail(exception, nil, echo), echo))
+    assert result.fault
+    assert canary("CONTRACT", 31) not in result.body.decode()
+    detail = etree.fromstring(result.body).find(f".//{{{IWS}}}{exception}")
+    assert detail is not None
+    for name in nil:
+        element = detail.find(name)
+        assert element is not None
+        assert element.get(f"{{{XSI}}}nil") == "true"
+        assert element.text is None
+        assert len(element) == 0
+
+
+def test_nil_elsewhere_in_a_fault_still_blocks(engine: MaskingEngine) -> None:
+    nil_text = fault(_nil_detail("IWSException", ()), "x").replace(
+        b'<env:Text xml:lang="en">x</env:Text>', f'<env:Text xml:lang="en" {NIL}/>'.encode()
+    )
+    with pytest.raises(MaskingBlockedError) as info:
+        _status_fault(engine, nil_text)
+    assert info.value.code == "NIL_NOT_ALLOWED"
+    nil_bean = fault(f'<tns:IWSException xmlns:tns="{IWS}" {NIL}/>', "x")
+    with pytest.raises(MaskingBlockedError) as info:
+        _status_fault(engine, nil_bean)
+    assert info.value.code == "NIL_NOT_ALLOWED"
+
+
+def test_a_nil_fault_field_with_content_still_blocks(engine: MaskingEngine) -> None:
+    detail = _nil_detail("IWSException", ()).replace(
+        "<causedBy>Synthetic detail</causedBy>", f"<causedBy {NIL}>Synthetic detail</causedBy>"
+    )
+    with pytest.raises(MaskingBlockedError) as info:
+        _status_fault(engine, fault(detail, "x"))
+    assert info.value.code == "MIXED_CONTENT"
+
+
+def test_an_unknown_fault_detail_element_still_blocks(engine: MaskingEngine) -> None:
+    detail = _nil_detail("IWSException", ("causedBy",)).replace(
+        "</tns:IWSException>", "<stackTrace>Synthetic</stackTrace></tns:IWSException>"
+    )
+    with pytest.raises(MaskingBlockedError) as info:
+        _status_fault(engine, fault(detail, "x"))
+    assert info.value.code == "UNKNOWN_ELEMENT"
+
+
+def test_nil_is_allowed_only_on_the_fault_detail_leaves(field_map: FieldMap) -> None:
+    allowed = {
+        e.path for e in field_map.entries.values() if e.nillable and e.operation == ANY_OPERATION
+    }
+    assert allowed == {
+        f"Fault/Detail/{name}/{leaf}" for name, fields in DETAIL_FIELDS.items() for leaf in fields
+    }
