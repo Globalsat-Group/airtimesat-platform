@@ -1,0 +1,37 @@
+id: RP-2026-001
+title: First recording, system calls on both endpoints
+purpose: |
+  Design s2-recorder-masker section 10.2 step 3, kept minimal: the first live run with the
+  reviewed overrides. It records system status and the version on both endpoints and one
+  authenticated ping. No identifier in any request, so no vault row is needed. Expected
+  outcome: five masked responses, zero runtime detector hits, zero unknown elements, and
+  the in-prefix counter at zero. One known exception: if IWS writes cbrmTime in the
+  signer's exact timestamp format within the second the request was signed,
+  getSystemStatus blocks with KNOWN_VALUE on cbrmTime. That is a collision with the
+  call's own signed timestamp, not a leak. No accountSearch: identifier filter types need
+  vault rows, and the catalog filter types (MODEL, VERTICAL, VESSEL_TYPE) stay refused
+  until the allowlist refuses wildcards in filterValue. No getIwsRequests: its window
+  must cover this run, so it goes in RP-2026-002.
+expires_at: 2026-11-30T00:00:00Z
+max_calls: 5
+calls:
+  - id: status-provisioning
+    endpoint: provisioning
+    operation: getSystemStatus
+    request: <request/>
+  - id: status-reporting
+    endpoint: reporting
+    operation: getSystemStatus
+    request: <request/>
+  - id: version-provisioning
+    endpoint: provisioning
+    operation: getIwsVersion
+    request: <request/>
+  - id: version-reporting
+    endpoint: reporting
+    operation: getIwsReportVersion
+    request: <request/>
+  - id: ping
+    endpoint: provisioning
+    operation: authenticatedPing
+    request: <request/>
