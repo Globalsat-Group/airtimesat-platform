@@ -38,12 +38,13 @@ _XSI_TYPE: Final = "{http://www.w3.org/2001/XMLSchema-instance}type"
 MAX_ENVELOPE_BYTES: Final = 512 * 1024
 
 # ---------------------------------------------------------------- allowlist (§5.3)
-# WSDL operation names (Annex D §2.2: getSubscriberOrgs, getEVoucherInventory). The test that
-# every name exists in the WSDL snapshot arrives with the snapshot.
-_SYSTEM_BOTH: Final = frozenset({"getSystemStatus", "getProjectVersion"})
+# WSDL operation names; tests/recorder/test_recorder_wsdl.py checks them against the
+# snapshot.
+_SYSTEM_BOTH: Final = frozenset({"getSystemStatus"})
 READS_PROVISIONING: Final = _SYSTEM_BOTH | frozenset(
     {
         # System
+        "getIwsVersion",
         "authenticatedPing",
         "findServiceProviderProfile",
         "getDemoAndTrialCounts",
@@ -72,7 +73,7 @@ READS_PROVISIONING: Final = _SYSTEM_BOTH | frozenset(
         "getFlagStates",
         "getPrepaidPlans",
         "getVoucherDenominations",
-        "getEVoucherInventory",
+        "getEvoucherInventory",
         "getSecondaryDataServices",
         "getBurstDeviceBundles",
         "getBurstServiceBundles",
@@ -89,7 +90,7 @@ READS_PROVISIONING: Final = _SYSTEM_BOTH | frozenset(
         "searchSimLock",
         "getRechargeHistory",
         "getPrepaidAccountDetail",
-        "getSubscriberOrgs",
+        "getSubscriberOrganizations",
         "getSubscriberOrgDetail",
         "getVessels",
         "getVessel",
@@ -103,6 +104,7 @@ READS_PROVISIONING: Final = _SYSTEM_BOTH | frozenset(
 )
 READS_REPORTING: Final = _SYSTEM_BOTH | frozenset(
     {
+        "getIwsReportVersion",
         "getReportTypes",
         "getReportCategory",
         "getReportColumns",
@@ -124,8 +126,8 @@ WRITES_PROVISIONING: Final = frozenset(
 )
 
 # ---------------------------------------------------------------- always refused (§5.4)
-# Matched case-insensitively, before the allowlist. Where the catalog and the WSDL spell a
-# name differently, both spellings are listed.
+# Matched case-insensitively, before the allowlist. WSDL names, except the two catalog
+# spellings marked below.
 ALWAYS_REFUSED: Final = frozenset(
     {
         # SP-wide writes
@@ -137,10 +139,11 @@ ALWAYS_REFUSED: Final = frozenset(
         "bulkAccountUpdate",
         "bulkAddPrepaid",
         "bulkDeletePrepaid",
+        "bulkProvisioning",
+        "bulkRechargePrepaidAccount",
         # Destructive or inventory-moving
         "deletePrepaidAccount",
         "deactivateTelephonyScratchCard",
-        "deactivateTelephonyScratchcard",
         "unquarantineDevice",
         "deviceTransferOwner",
         "loadIMEI",
@@ -171,7 +174,7 @@ ALWAYS_REFUSED: Final = frozenset(
         "activateTelephonyScratchCards",
         "updateScratchCardStatus",
         "refundPrepaidVoucher",
-        "getScratchcards",
+        "getScratchCards",
         "getScratchCardBatches",
         "getScratchcardDeals",
         "getScratchcardOrders",
@@ -179,6 +182,7 @@ ALWAYS_REFUSED: Final = frozenset(
         "searchVoucherOrder",
         "getPrepaidAccountSummary",
         "searchDeviceUsage",
+        "queryScratchCards",
         # Reports delivered outside the recorder or returning bulk rows
         "createScheduledReport",
         "updateScheduledReport",
@@ -217,12 +221,16 @@ ALWAYS_REFUSED: Final = frozenset(
         "updateTopicAssociation",
         "updateQueueEntry",
         "createVessel",
+        "updateVessel",
+        # Not in the WSDL (a catalog spelling); kept so that no spelling of it ever passes.
         "updateVessels",
         "createSecondaryDataService",
         "updateSecondaryDataService",
         "deleteSecondaryDataService",
         "createSubscriberOrganization",
         "updateSubscriberOrganization",
+        "updateSubscriberOrgStatus",
+        # Not in the WSDL (a catalog short name); kept for the same reason.
         "updateSubscriberOrg",
         "updatePTTSubOrgStatus",
     }

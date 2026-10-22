@@ -23,7 +23,7 @@ CHECKOV = run_checkov() { rc=0; out="$$(checkov "$$@" --quiet --compact)" || rc=
 BANNED_TRIGGERS := pull_request_target|workflow_run|issue_comment
 
 .PHONY: help sync lint format typecheck contracts test plans security gitleaks leak-scan audit \
-	licences terraform workflows check run
+	licences terraform workflows check run fieldmap
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-11s %s\n", $$1, $$2}'
@@ -68,6 +68,9 @@ plans: ## recorder check over the plans changed against origin/main (passes when
 	fi; \
 	if [ ! -s "$$list" ]; then echo "plans: no changed recording plans"; \
 	else xargs -0 $(UV_RUN) python -m airtimesat_platform.recorder check -- < "$$list"; fi
+
+fieldmap: ## Regenerate gateway/wsdl/fieldmap/generated.yaml from the SITEST WSDL snapshot
+	$(UV_RUN) python scripts/generate_fieldmap.py
 
 security: gitleaks leak-scan audit licences ## gitleaks, leak scan, pip-audit and the licence gate
 

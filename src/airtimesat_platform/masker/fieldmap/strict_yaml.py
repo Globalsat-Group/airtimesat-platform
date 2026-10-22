@@ -51,9 +51,9 @@ class _StrictLoader(yaml.SafeLoader):
         return cast(dict[Any, Any], super().construct_mapping(node, deep=True))
 
 
-def load_strict(text: str) -> object:
-    """Parse one strict YAML document."""
-    if len(text.encode("utf-8")) > MAX_BYTES:
+def load_strict(text: str, *, max_bytes: int = MAX_BYTES) -> object:
+    """Parse one strict YAML document of at most ``max_bytes``."""
+    if len(text.encode("utf-8")) > max_bytes:
         raise StrictYamlError("YAML_TOO_LARGE")
     try:
         return yaml.load(text, Loader=_StrictLoader)  # noqa: S506 - a SafeLoader subclass

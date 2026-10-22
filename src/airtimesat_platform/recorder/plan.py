@@ -13,7 +13,10 @@ this order, and the first refusal wins:
    purpose, call ids and references are scanned by the §8.1 detectors.
 7. The read allowlist, references and the call budget, then each method's limits
    (``policy.allowlist``).
-8. With the generated field map: every reference fills an identifier field from an
+8. The WSDL schema (design §5.5 step 1, ``gateway.sitest_port.validate_request``): each
+   request as sent, with the elements the recorder sets, against its endpoint's schema.
+   Without the WSDL snapshot this step is skipped.
+9. With the generated field map: every reference fills an identifier field from an
    identifier field of an earlier response, every request passes the masker's vault-free
    request check (``MaskingEngine.check_request``), and, every call being a read, no
    free-text field carries a value and no identifier field is blank (§5.5 step 8).
@@ -47,6 +50,7 @@ from typing import Final, cast
 
 import yaml
 
+from airtimesat_platform.gateway.sitest_port import Endpoint, validate_request
 from airtimesat_platform.masker.detect.patterns import Options
 from airtimesat_platform.masker.detect.scan import offline_exemption, scan_value
 from airtimesat_platform.masker.engine import MaskingEngine
@@ -600,6 +604,21 @@ def _check_search_inputs(ctx: FieldMapContext, call: Call, root: Element) -> Non
             raise PlanRefusedError("IDENTIFIER_BLANK", ctx.location(call.where, path))
 
 
+def _check_schema(plan: Plan, call: Call) -> None:
+    """Refuse a request that, as the recorder sends it, breaks the WSDL schema (§5.5 step 1)."""
+    root = _parse_request(call)
+    rules = allowlist.LIMITS.get(call.operation)
+    for name in rules.set_by_recorder if rules else ():
+        # Appended at run time with the recorder's caller (§5.5 step 8; ``run``).
+        root.append(root.makeelement(name))
+        root[-1].text = f"rec.{plan.id}"
+    request = serialize(root, declaration=False).decode("utf-8")
+    refusal = validate_request(Endpoint(call.endpoint), call.operation, request, placeholder=ITEM)
+    if refusal is not None:
+        where = f"{call.where}/{refusal.path}".rstrip("/")
+        raise PlanRefusedError("WSDL_SCHEMA_INVALID", f"{where}#{refusal.code}")
+
+
 def check_plan(
     text: str,
     *,
@@ -613,6 +632,8 @@ def check_plan(
     passes the other checks is then refused with ``field_map_refusal`` (fail closed).
     """
     plan = load_plan(text, now=now)
+    for call in plan.calls:
+        _check_schema(plan, call)
     if field_map is None:
         raise PlanRefusedError(field_map_refusal)
     for call in plan.calls:

@@ -41,7 +41,7 @@ SEARCH = (
 ACCOUNT = "<request><accountNo>${item}</accountNo></request>"
 LOG = (
     "<request><iwsOperation>accountSearch</iwsOperation><startDate>2026-10-21T00:00:00Z"
-    "</startDate><endDate>2026-10-21T10:00:00Z</endDate><Limit>10</Limit></request>"
+    "</startDate><endDate>2026-10-21T10:00:00Z</endDate><limit>10</limit></request>"
 )
 NS = 'xmlns:ns="urn:example:iws"'
 IMEI = canary("IMEI", 61)

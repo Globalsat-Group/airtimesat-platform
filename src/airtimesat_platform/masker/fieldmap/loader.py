@@ -27,6 +27,9 @@ from airtimesat_platform.masker.fieldmap.strict_yaml import load_strict
 from airtimesat_platform.masker.freetext import Template
 
 _NAME: Final = r"[A-Za-z_][A-Za-z0-9_.\-]{0,127}"
+# The generated map of the SITEST snapshot is about 2.3 MB; plans and overrides keep the
+# strict loader's default limit.
+MAX_GENERATED_BYTES: Final = 4 * 1024 * 1024
 _PATH: Final = re.compile(rf"{_NAME}(?:\[{_NAME}\])?(?:/{_NAME}(?:\[{_NAME}\])?)*")
 
 _GENERATED_KEYS: Final = frozenset(
@@ -122,7 +125,7 @@ def _target(value: object, where: str) -> tuple[Treatment, str | None]:
 
 def load_generated(text: str) -> list[FieldEntry]:
     """Parse the generated map: every path UNCLASSIFIED, with optional KEEP proposals."""
-    doc = _mapping(load_strict(text), "generated")
+    doc = _mapping(load_strict(text, max_bytes=MAX_GENERATED_BYTES), "generated")
     _keys(doc, frozenset({"format", "source", "paths"}), {"format", "paths"}, "generated")
     if doc["format"] != GENERATED_FORMAT:
         raise FieldMapError("FIELDMAP_FORMAT", path="generated")

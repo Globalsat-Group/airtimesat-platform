@@ -34,8 +34,7 @@ from airtimesat_platform.gateway.signing import OPERATION_PATTERN
 SOAP12_NS: Final = "http://www.w3.org/2003/05/soap-envelope"
 IWS_NS: Final = "http://www.iridium.com"
 XSI_NS: Final = "http://www.w3.org/2001/XMLSchema-instance"
-# The reporting endpoint is assumed to use the same operation namespace; the WSDL snapshot
-# (S2, after the harvest) confirms or corrects it.
+# Both SITEST WSDLs use this operation namespace for every operation (soap12:body).
 
 AUTH_FIELDS: Final = (
     "iwsUsername",

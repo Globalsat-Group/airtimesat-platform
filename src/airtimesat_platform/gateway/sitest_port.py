@@ -22,20 +22,26 @@ It reaches the SITEST endpoints only: there is no Beta or production endpoint in
 gateway, and the ``sitest-only`` import contract keeps this module away from ``gateway.api``.
 
 ``generated_field_map_text`` returns the generated field map (design §4.5, §7.2) for the
-recorder to hand to the masker. It is absent until the WSDL harvest, and then every
-``recorder check`` fails closed.
+recorder to hand to the masker; without it every ``recorder check`` fails closed.
+
+``validate_request`` checks one plan request against the embedded schema of its endpoint's
+WSDL snapshot (§5.5 step 1), for ``recorder check`` and the run's own check.
 """
 
 import asyncio
+import copy
+import functools
 import re
 import time
 from collections import deque
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from importlib import resources
-from typing import Final, Protocol
+from typing import Final, Protocol, cast
+
+from lxml import etree
 
 from airtimesat_platform.common.secrets import (
     SecretNotAvailableError,
@@ -47,8 +53,9 @@ from airtimesat_platform.common.secrets import (
 # raises the other, and the recorder may import nothing else from the gateway.
 from airtimesat_platform.gateway.endpoints_sitest import Endpoint as Endpoint
 from airtimesat_platform.gateway.endpoints_sitest import endpoint_url
-from airtimesat_platform.gateway.envelope import AuthFields, build_envelope
+from airtimesat_platform.gateway.envelope import AUTH_FIELDS, IWS_NS, AuthFields, build_envelope
 from airtimesat_platform.gateway.errors import (
+    GatewayError,
     RefusedError,
     ResponseError,
     SigningError,
@@ -77,6 +84,38 @@ CALLER_PATTERN: Final = re.compile(r"\Arec\.[A-Za-z0-9][A-Za-z0-9._-]{0,63}\Z")
 _FAULT_STATUSES: Final = frozenset({400, 500})
 # Package path of the generated field map; WSDL-derived files stay in the gateway (CLAUDE.md).
 GENERATED_FIELD_MAP: Final = ("wsdl", "fieldmap", "generated.yaml")
+WSDL_SNAPSHOT: Final = ("wsdl", "sitest")
+MAX_WSDL_BYTES: Final = 4 * 1024 * 1024
+MAX_PLAN_REQUEST_BYTES: Final = 256 * 1024
+_XS: Final = "{http://www.w3.org/2001/XMLSchema}"
+_WSDL: Final = "{http://schemas.xmlsoap.org/wsdl/}"
+# libxml2 error types of a wrong value (a type, an enumeration or a facet), matched exactly.
+# Everything else is wrong content: an element or attribute unknown, missing, misplaced or in
+# the wrong namespace, or children or attributes in a simple-typed element (CVC_TYPE_3_1_*).
+_VALUE_ERRORS: Final = frozenset(
+    f"SCHEMAV_CVC_{name}"
+    for name in (
+        "DATATYPE_VALID_1_2_1",
+        "DATATYPE_VALID_1_2_2",
+        "DATATYPE_VALID_1_2_3",
+        "ENUMERATION_VALID",
+        "FACET_VALID",
+        "LENGTH_VALID",
+        "MINLENGTH_VALID",
+        "MAXLENGTH_VALID",
+        "MININCLUSIVE_VALID",
+        "MAXINCLUSIVE_VALID",
+        "MINEXCLUSIVE_VALID",
+        "MAXEXCLUSIVE_VALID",
+        "PATTERN_VALID",
+        "TOTALDIGITS_VALID",
+        "FRACTIONDIGITS_VALID",
+    )
+)
+# Schema components that load another file through libxml2's own I/O, which the parser's
+# no_network flag does not cover. The snapshot has none; one in it is refused.
+_EXTERNAL: Final = ("import", "include", "redefine", "override")
+_AUTH_BASE: Final = "authenticatedIwsRequestImpl"
 
 
 def generated_field_map_text() -> str | None:
@@ -89,6 +128,136 @@ def generated_field_map_text() -> str | None:
     if not resource.is_file():
         return None
     return resource.read_text(encoding="utf-8")
+
+
+@dataclass(frozen=True, slots=True)
+class SchemaRefusal:
+    """Why a plan request failed the WSDL schema: a code and a path of schema names only."""
+
+    code: str
+    path: str
+
+
+class _LogEntry(Protocol):
+    """The two fields read from an lxml error-log entry; never its message."""
+
+    type_name: str
+    path: str
+
+
+@dataclass(frozen=True, slots=True)
+class _Schema:
+    schema: etree.XMLSchema
+    operations: frozenset[str]
+    names: frozenset[str]
+
+
+def _safe_parser() -> etree.XMLParser:
+    return etree.XMLParser(resolve_entities=False, no_network=True, load_dtd=False, huge_tree=False)
+
+
+@functools.cache
+def _endpoint_schema(endpoint: Endpoint) -> _Schema | None:
+    """Compile the endpoint's embedded schema once per process; ``None`` without a snapshot.
+
+    Each operation gets a global element ``tns:<operation>`` holding the unqualified part
+    ``request``, as an RPC/literal message writes it. The authentication fields of the base
+    request type are removed: the signer core adds them, so a plan never carries them.
+    """
+    resource = resources.files("airtimesat_platform.gateway").joinpath(
+        *WSDL_SNAPSHOT, f"{endpoint.value}.wsdl"
+    )
+    if not resource.is_file():
+        return None
+    data = resource.read_bytes()
+    if len(data) > MAX_WSDL_BYTES or b"<!DOCTYPE" in data or b"<!ENTITY" in data:
+        raise GatewayError("WSDL_SNAPSHOT_INVALID")
+    wsdl = etree.fromstring(data, _safe_parser())
+    schema = copy.deepcopy(wsdl.find(f"{_WSDL}types/{_XS}schema"))
+    base = None if schema is None else schema.find(f"{_XS}complexType[@name='{_AUTH_BASE}']")
+    if (
+        schema is None
+        or base is None
+        or any(schema.find(f"{_XS}{n}") is not None for n in _EXTERNAL)
+    ):
+        raise GatewayError("WSDL_SNAPSHOT_INVALID")
+    for sequence in base.iterfind(f"{_XS}sequence"):
+        for element in [e for e in sequence if e.get("name") in AUTH_FIELDS]:
+            sequence.remove(element)
+    parts = {
+        m.get("name"): m.find(f"{_WSDL}part[@name='request']") for m in wsdl.iter(f"{_WSDL}message")
+    }
+    operations: set[str] = set()
+    for operation in wsdl.iterfind(f"{_WSDL}portType/{_WSDL}operation"):
+        name, message = operation.get("name", ""), operation.find(f"{_WSDL}input")
+        part = None if message is None else parts.get(message.get("message", "").rpartition(":")[2])
+        if part is None:
+            continue
+        wrapper = etree.SubElement(schema, f"{_XS}element", name=name)
+        group = etree.SubElement(etree.SubElement(wrapper, f"{_XS}complexType"), f"{_XS}sequence")
+        etree.SubElement(group, f"{_XS}element", name="request", type=part.get("type", ""))
+        operations.add(name)
+    names = frozenset(e.get("name", "") for e in schema.iter(f"{_XS}element"))
+    return _Schema(etree.XMLSchema(etree.ElementTree(schema)), frozenset(operations), names)
+
+
+def _shown(path: str, names: frozenset[str]) -> str:
+    """Turn libxml2's node path into ``request/...`` with prefixes and positions dropped.
+
+    A name the schema does not declare is shown as ``?``: a plan could put data in one.
+    """
+    segments = [re.sub(r"\[.*\]$|^[^:\[]*:", "", s) for s in path.split("/") if s][1:]
+    return "/".join(s if s in names else "?" for s in segments)
+
+
+def _is_bare(node: object, placeholder: str) -> bool:
+    # _Element is lxml's public element class, private only by its name.
+    return (
+        isinstance(node, etree._Element)  # pyright: ignore[reportPrivateUsage]
+        and len(node) == 0
+        and not node.attrib
+        and node.text == placeholder
+    )
+
+
+def validate_request(
+    endpoint: Endpoint, operation: str, request: str, *, placeholder: str | None = None
+) -> SchemaRefusal | None:
+    """Validate one plan request against the WSDL schema; ``None`` if it passes.
+
+    ``request`` is the plan's ``<request>`` element. It is wrapped in the operation element in
+    the IWS namespace, as the signer core sends it. A wrong value in an element whose whole
+    text is ``placeholder`` (``${item}``, filled at run time) is not counted. Returns a code and
+    a safe path, never an lxml message, which can echo values. Without the WSDL snapshot
+    nothing is checked and ``None`` is returned, as before the snapshot existed.
+    """
+    compiled = _endpoint_schema(endpoint)
+    if compiled is None:
+        return None
+    if operation not in compiled.operations:
+        return SchemaRefusal("SCHEMA_UNKNOWN_OPERATION", "")
+    data = request.encode("utf-8")
+    if len(data) > MAX_PLAN_REQUEST_BYTES or b"<!" in data:
+        return SchemaRefusal("SCHEMA_NOT_PLAIN_XML", "")
+    try:
+        root = etree.fromstring(data, _safe_parser())
+    except etree.XMLSyntaxError:
+        return SchemaRefusal("SCHEMA_NOT_PLAIN_XML", "")
+    wrapper = etree.Element(f"{{{IWS_NS}}}{operation}", nsmap={"tns": IWS_NS})
+    wrapper.append(root)
+    document = etree.ElementTree(wrapper)
+    if compiled.schema.validate(document):
+        return None
+    for error in cast(Iterable[_LogEntry], compiled.schema.error_log):
+        value_error = error.type_name in _VALUE_ERRORS
+        if value_error and placeholder is not None:
+            nodes = cast(list[object], document.xpath(error.path, namespaces={"tns": IWS_NS}))
+            # Only a bare placeholder is forgiven: no children, no attributes, no other text.
+            if nodes and all(_is_bare(node, placeholder) for node in nodes):
+                continue
+        code = "SCHEMA_VALUE" if value_error else "SCHEMA_CONTENT"
+        return SchemaRefusal(code, _shown(error.path, compiled.names))
+    return None
 
 
 @dataclass(frozen=True, slots=True)

@@ -112,10 +112,21 @@ def test_writes_need_the_port_opened_for_writes(operation: str) -> None:
     assert raised.value.code == "WRITES_NOT_ENABLED"
 
 
-@pytest.mark.parametrize("operation", ["getSystemStatus", "getProjectVersion"])
-def test_system_calls_on_both_endpoints(operation: str) -> None:
+def test_system_status_on_both_endpoints() -> None:
     for endpoint in Endpoint:
-        check_operation(endpoint, operation, allow_writes=False)
+        check_operation(endpoint, "getSystemStatus", allow_writes=False)
+
+
+@pytest.mark.parametrize(
+    ("endpoint", "operation"),
+    [(Endpoint.PROVISIONING, "getIwsVersion"), (Endpoint.REPORTING, "getIwsReportVersion")],
+)
+def test_version_call_on_its_own_endpoint_only(endpoint: Endpoint, operation: str) -> None:
+    check_operation(endpoint, operation, allow_writes=False)
+    other = next(e for e in Endpoint if e is not endpoint)
+    with pytest.raises(RefusedError) as raised:
+        check_operation(other, operation, allow_writes=False)
+    assert raised.value.code == "OPERATION_NOT_ALLOWLISTED"
 
 
 # ---------------------------------------------------------------- envelope structure

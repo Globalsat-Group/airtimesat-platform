@@ -46,15 +46,15 @@ paths:
   - {operation: getVessels, direction: response, path: getVesselsResponse, xsd_type: complex}
   - {operation: getVessels, direction: response, path: getVesselsResponse/vessel, xsd_type: complex, min_occurs: 0, max_occurs: unbounded}
   - {operation: getVessels, direction: response, path: getVesselsResponse/vessel/vesselName, xsd_type: string}
-  # getSubscriberOrgs (catalog: getSubscriberOrganizations)
-  - {operation: getSubscriberOrgs, direction: request, path: request, xsd_type: complex}
-  - {operation: getSubscriberOrgs, direction: request, path: request/Id, xsd_type: string, min_occurs: 0}
-  - {operation: getSubscriberOrgs, direction: request, path: request/Name, xsd_type: string, min_occurs: 0}
-  - {operation: getSubscriberOrgs, direction: response, path: getSubscriberOrgsResponse, xsd_type: complex}
+  # getSubscriberOrganizations
+  - {operation: getSubscriberOrganizations, direction: request, path: request, xsd_type: complex}
+  - {operation: getSubscriberOrganizations, direction: request, path: request/id, xsd_type: string, min_occurs: 0}
+  - {operation: getSubscriberOrganizations, direction: request, path: request/name, xsd_type: string, min_occurs: 0}
+  - {operation: getSubscriberOrganizations, direction: response, path: getSubscriberOrganizationsResponse, xsd_type: complex}
   # bulkActionSearch
   - {operation: bulkActionSearch, direction: request, path: request, xsd_type: complex}
   - {operation: bulkActionSearch, direction: request, path: request/bulkRequestId, xsd_type: string}
-  - {operation: bulkActionSearch, direction: request, path: request/Wildcard, xsd_type: string, min_occurs: 0}
+  - {operation: bulkActionSearch, direction: request, path: request/wildcard, xsd_type: string, min_occurs: 0}
   - {operation: bulkActionSearch, direction: response, path: bulkActionSearchResponse, xsd_type: complex}
   # getRechargeHistory
   - {operation: getRechargeHistory, direction: request, path: request, xsd_type: complex}
@@ -68,17 +68,17 @@ paths:
   - {operation: getPrepaidAccountDetail, direction: request, path: request/ownerName, xsd_type: string}
   - {operation: getPrepaidAccountDetail, direction: request, path: request/note, xsd_type: string}
   - {operation: getPrepaidAccountDetail, direction: response, path: getPrepaidAccountDetailResponse, xsd_type: complex}
-  # getEVoucherInventory (catalog: getEvoucherInventory)
-  - {operation: getEVoucherInventory, direction: request, path: request, xsd_type: complex}
-  - {operation: getEVoucherInventory, direction: request, path: request/limit, xsd_type: int}
-  - {operation: getEVoucherInventory, direction: request, path: request/startRow, xsd_type: int}
-  - {operation: getEVoucherInventory, direction: response, path: getEVoucherInventoryResponse, xsd_type: complex}
+  # getEvoucherInventory
+  - {operation: getEvoucherInventory, direction: request, path: request, xsd_type: complex}
+  - {operation: getEvoucherInventory, direction: request, path: request/limit, xsd_type: int}
+  - {operation: getEvoucherInventory, direction: request, path: request/startRow, xsd_type: int}
+  - {operation: getEvoucherInventory, direction: response, path: getEvoucherInventoryResponse, xsd_type: complex}
   # getIwsRequests
   - {operation: getIwsRequests, direction: request, path: request, xsd_type: complex}
   - {operation: getIwsRequests, direction: request, path: request/iwsOperation, xsd_type: string}
   - {operation: getIwsRequests, direction: request, path: request/startDate, xsd_type: string, min_occurs: 0}
   - {operation: getIwsRequests, direction: request, path: request/endDate, xsd_type: string, min_occurs: 0}
-  - {operation: getIwsRequests, direction: request, path: request/Limit, xsd_type: int, min_occurs: 0}
+  - {operation: getIwsRequests, direction: request, path: request/limit, xsd_type: int, min_occurs: 0}
   - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse, xsd_type: complex}
   - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse/iwsLog, xsd_type: complex, min_occurs: 0, max_occurs: unbounded}
   - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse/iwsLog/requestId, xsd_type: string}
@@ -105,4 +105,7 @@ paths:
   - {operation: getSystemStatus, direction: request, path: request, xsd_type: complex}
   - {operation: getSystemStatus, direction: response, path: getSystemStatusResponse, xsd_type: complex}
   - {operation: getReportTypes, direction: request, path: request, xsd_type: complex}
+  - {operation: getReportTypes, direction: request, path: request/limit, xsd_type: int, min_occurs: 0}
+  - {operation: getReportTypes, direction: request, path: request/startRow, xsd_type: int, min_occurs: 0}
+  - {operation: getReportTypes, direction: request, path: request/reportCategory, xsd_type: string, min_occurs: 0}
   - {operation: getReportTypes, direction: response, path: getReportTypesResponse, xsd_type: complex}

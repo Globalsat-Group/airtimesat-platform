@@ -17,11 +17,13 @@ from typing import Final
 import pytest
 import yaml
 
+from airtimesat_platform.gateway.sitest_port import validate_request
 from airtimesat_platform.masker import xmlsafe
 from airtimesat_platform.masker.logsafe import safe_excepthook
 from airtimesat_platform.masker.tokenize.surrogates import SPECS
 from airtimesat_platform.recorder import __main__ as cli
-from airtimesat_platform.recorder.__main__ import main, packaged_field_map
+from airtimesat_platform.recorder import plan as plan_module
+from airtimesat_platform.recorder.__main__ import main
 
 Build = Callable[..., str]
 MakeCall = Callable[..., dict[str, object]]
@@ -133,7 +135,6 @@ def test_help_exits_zero(capsys: pytest.CaptureFixture[str]) -> None:
 def test_without_the_generated_field_map_every_plan_fails_closed(run: Run, build: Build) -> None:
     code, out = run(build(), field_map=False)
     assert (code, out.split()[2]) == (1, "FIELD_MAP_MISSING")
-    assert packaged_field_map() is None
 
 
 @pytest.mark.parametrize(
@@ -310,7 +311,7 @@ S = SENTINEL
 LOW = SENTINEL.lower()
 STATUS = "<request><updateType>SUBSCRIBER_ACCOUNT_NUMBER</updateType><value>SUB-9000000</value>"
 XSI = 'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:t="urn:t"'
-IWS_LOG = "<request><Limit>5</Limit>{dates}<iwsOperation>{S}</iwsOperation></request>"
+IWS_LOG = "<request><limit>5</limit>{dates}<iwsOperation>{S}</iwsOperation></request>"
 
 CASES: list[tuple[str | bytes, str]] = [
     (f"id: {S}\nid: {S}\n", "YAML_DUPLICATE_KEY"),
@@ -430,11 +431,11 @@ CASES: list[tuple[str | bytes, str]] = [
         "FOR_EACH_WITHOUT_ITEM",
     ),
     (
-        plan(one("getEVoucherInventory", f"<request><limit>{S}</limit></request>")),
+        plan(one("getEvoucherInventory", f"<request><limit>{S}</limit></request>")),
         "LIMIT_NOT_AN_INTEGER",
     ),
     (
-        plan(one("getEVoucherInventory", "<request><limit>999</limit></request>")),
+        plan(one("getEvoucherInventory", "<request><limit>999</limit></request>")),
         "LIMIT_OUT_OF_RANGE",
     ),
     (
@@ -514,14 +515,14 @@ CASES: list[tuple[str | bytes, str]] = [
     (plan(one("accountSearch", f"<getVessels><x>{S}</x></getVessels>")), "OPERATION_ROOT_MISMATCH"),
     # Limits and windows
     (
-        plan(one("getEVoucherInventory", f"<request><Limit>5</Limit><x>{S}</x></request>")),
+        plan(one("getEvoucherInventory", f"<request><Limit>5</Limit><x>{S}</x></request>")),
         "ELEMENT_NAME_CASE",
     ),
     (
-        plan(one("getEVoucherInventory", f"<request><limit>5</limit><limit>{S}</limit></request>")),
+        plan(one("getEvoucherInventory", f"<request><limit>5</limit><limit>{S}</limit></request>")),
         "LIMIT_DUPLICATE",
     ),
-    (plan(one("getEVoucherInventory", f"<request><x>{S}</x></request>")), "LIMIT_MISSING"),
+    (plan(one("getEvoucherInventory", f"<request><x>{S}</x></request>")), "LIMIT_MISSING"),
     (plan(one("getIwsRequests", IWS_LOG.format(dates="", S=S))), "WINDOW_MISSING"),
     (
         plan(
@@ -827,7 +828,9 @@ def test_the_sentinel_cases_cover_every_refusal_path() -> None:
     codes = _refusal_codes()
     assert len(codes) > 80
     assert {"ALWAYS_REFUSED_DEACTIVE", "FILTER_COND_REFUSED", "XML_CDATA"} <= codes
-    covered = {code for _, code in CASES} | FILE_CASES
+    # WSDL_SCHEMA_INVALID runs against the real snapshot with a sentinel in
+    # test_a_schema_refusal_prints_no_value, below, and in tests/recorder/test_recorder_wsdl.py.
+    covered = {code for _, code in CASES} | FILE_CASES | {"WSDL_SCHEMA_INVALID"}
     assert codes - covered == set(UNREACHABLE)
     assert SPECS["IMEI"].is_surrogate_shape(IMEI)
     assert SPECS["IMO"].is_surrogate_shape(IMO)
@@ -869,13 +872,34 @@ def test_no_plan_value_reaches_the_output_without_a_field_map(
     assert SENTINEL not in out + capsys.readouterr().err
 
 
+def test_a_schema_refusal_prints_no_value(
+    run: Run, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(plan_module, "validate_request", validate_request)
+    status, out = run(plan(one("getSystemStatus", f"<request><{SENTINEL}/></request>")))
+    assert (status, out.split()[2:]) == (
+        1,
+        ["WSDL_SCHEMA_INVALID", "calls[0]/request#SCHEMA_CONTENT"],
+    )
+    assert SENTINEL not in out + capsys.readouterr().err
+
+
 # ---------------------------------------------------------------- the real entry point
 
 
-def test_python_dash_m(tmp_path: Path, build: Build) -> None:
+def test_python_dash_m(
+    tmp_path: Path, build: Build, make_call: MakeCall, surrogate: Surrogate
+) -> None:
     # The subprocess reads the real clock, so the plan expires a month from now.
     expires = (datetime.now(UTC) + timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
-    (tmp_path / "plan.yaml").write_text(build(expires_at=expires), encoding="utf-8")
+    # Schema-valid against the real WSDL snapshot, so the packaged generated map judges it.
+    request = (
+        "<request><filterType>IMEI</filterType><filterCond>EQUALS</filterCond>"
+        f"<filterValue>{surrogate('IMEI')}</filterValue><limit>5</limit><startRow>0</startRow>"
+        "</request>"
+    )
+    text = build([make_call("search", "accountSearch", request)], expires_at=expires)
+    (tmp_path / "plan.yaml").write_text(text, encoding="utf-8")
     command = [sys.executable, "-m", "airtimesat_platform.recorder"]
     # A fixed program and arguments built by this test.
     checked = subprocess.run(  # noqa: S603
@@ -886,7 +910,8 @@ def test_python_dash_m(tmp_path: Path, build: Build) -> None:
         cwd=tmp_path,
     )
     assert checked.returncode == 1
-    assert checked.stdout == "REFUSED plan.yaml FIELD_MAP_MISSING\n"
+    # The real map has every path UNCLASSIFIED until the overrides classify them.
+    assert checked.stdout == "REFUSED plan.yaml UNCLASSIFIED_ELEMENT calls[0]/request\n"
     assert checked.stderr == ""
     usage = subprocess.run(command, capture_output=True, text=True, check=False)  # noqa: S603 - as above
     assert usage.returncode == 2

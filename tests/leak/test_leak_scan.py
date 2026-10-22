@@ -54,6 +54,15 @@ OTHER_GLOBAL_V4 = str(ipaddress.IPv4Address(0x08080808))
 GLOBAL_V6 = str(ipaddress.IPv6Address((0x2606_4700 << 96) | 0x1111))
 
 
+def test_only_signature_is_off_in_the_generated_field_map() -> None:
+    generated = "src/airtimesat_platform/gateway/wsdl/fieldmap/generated.yaml"
+    # A 27-character run of names joined by "/" (built here, never a real signature).
+    path_run = 'path: "x[y]/' + "deviceNumber" + "/" + "submarketType" + '"'
+    assert "SIGNATURE" in SCANNER.scan_line("src/other.yaml", path_run)
+    assert SCANNER.scan_line(generated, path_run) == []
+    assert "IMEI" in SCANNER.scan_line(generated, f"x: {canary('IMEI', 1)}")
+
+
 def test_global_addresses_count_in_standard_mode() -> None:
     line = f"host {GLOBAL_V4} and {GLOBAL_V6}"
     assert SCANNER.scan_line("docs/a.md", line) == ["IPV4", "IPV6"]
