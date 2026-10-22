@@ -459,9 +459,12 @@ def test_an_unknown_element_blocks_the_method(harness: Harness) -> None:
             f"<ns:accountSearchResponse {NS}><x>1</x></ns:accountSearchResponse>"
         ),
     )
-    blocked(harness, plan, "UNKNOWN_ELEMENT")
+    out = blocked(harness, plan, "UNKNOWN_ELEMENT")
     with open_store(harness.config.data_dir) as store:
         assert [op for _, op in store.open_incidents(["accountSearch"])] == ["accountSearch"]
+    # IWS answered, so the block line says what kind of answer it was (an enum, never text).
+    line = next(x for x in out.splitlines() if x.startswith("CALL_BLOCKED"))
+    assert "outcome=ok" in line
 
 
 def test_an_oversized_response_blocks(harness: Harness) -> None:
@@ -531,6 +534,8 @@ def test_a_timeout_records_a_cooldown_that_holds_across_runs(harness: Harness) -
     status, out = h.run(plan)
     assert status == 1
     assert "code=TRANSPORT_TIMEOUT" in out
+    # IWS never answered: no outcome to show.
+    assert "outcome=" not in next(x for x in out.splitlines() if x.startswith("CALL_FAILED"))
     assert incidents(h) == [("accountSearch", "TRANSPORT_TIMEOUT", "", "", 0)]
     assert h.query("SELECT cooldown_until FROM run_log") == [
         (utc_text(h.now + timedelta(seconds=60)),)

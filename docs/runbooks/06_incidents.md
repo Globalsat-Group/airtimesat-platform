@@ -16,9 +16,13 @@ What an agent may get: the refusal code, the call id, the detector id and the el
 
 ## 1. `MASKING_BLOCKED` or another block
 
-1. The run stops and writes nothing for that call. The terminal shows `CALL_BLOCKED` with the code, the call id and the detector id.
+1. The run stops and writes nothing for that call. The terminal shows `CALL_BLOCKED` with the code, the call id, the element path, the detector id and, when IWS answered, `outcome=`: `ok`, or for a SOAP fault its error code (`AUTH`, `CONFIG`, `FIELD`, `SYS`) or `unknown`. The outcome is an enum, never text, so you can share it. For a block recorded before the terminal showed it, read it from the run log, read-only (this prints no secret):
+
+   ```zsh
+   sqlite3 -readonly <DATA_DIR>/vault.sqlite "SELECT call_id, decision, code, outcome FROM run_log ORDER BY id DESC LIMIT 3;"
+   ```
 2. The method stays refused until the fix merges and you run `recorder incident clear <id>` ([`04`](04_recording_session.md)). After `STAGING_SCAN_HIT`, every run stays refused until you clear it. A `CALL_FAILED` (a refusal, a timeout, an outage page, a disk error) refuses nothing: fix the cause and run again.
-3. Give the agents the code, call id, detector id and element path; they propose the fix in a PR.
+3. Give the agents the code, call id, detector id, element path and outcome; they propose the fix in a PR. A block on a SOAP fault means two things to fix: the masking of that fault, and whatever made IWS answer with a fault (the outcome says what kind).
 4. If you need the raw response, reproduce it by hand (SoapUI, under `01` "SoapUI calls"), for a read only, in the manual-call folder. Delete the raw file once the fix is verified. Never reproduce a write or a refused call.
 
 Done when the fix is merged, the incident is cleared, and a new run passes.
