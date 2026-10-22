@@ -3,170 +3,125 @@
 | | |
 |---|---|
 | **Purpose** | Set up the one device that runs the recorder and your manual IWS calls, and holds raw data, the vault and the age-encrypted secrets files |
-| **When** | Part A before any IWS call. Part B before the first recording. Part C before every run and every manual call. Part D once, before the first recording |
+| **When** | Parts A, B and D once, before the first recording (Part A before any IWS call). Part C before every run and every manual call |
 | **Who** | The CTO only |
 | **Design** | [§6.5](../design/s2-recorder-masker.md#65-the-trusted-machine), [§6.2](../design/s2-recorder-masker.md#62-keys-and-the-secret), [§6.3](../design/s2-recorder-masker.md#63-backup-and-recovery), [§13](../design/s2-recorder-masker.md#13-decisions-and-open-items) #19, #20, #34 |
 | **Status** | Draft for CTO review |
 
-The decided setup (design §13 #19 and #34, risks accepted): your laptop, your normal OS user, your normal Keeper app; AI tools may run on the same user. The recorder's secrets sit in age-encrypted files in the recorder data folder, under one passphrase kept in Keeper. There is no Keeper CLI. The controls are the merge check of Part C, running only reviewed code from `main`, and the run-time rules. Device: [FILL: device and OS].
+The decided setup (design §13 #19 and #34, risks accepted): your laptop, your normal OS user, your normal Keeper app; AI tools may run on the same user. The recorder does the secrets work itself: `recorder init` creates the encrypted files once, and `recorder run` decrypts them, with one passphrase prompt per run. There is no Keeper CLI. The controls are the merge check of Part C, running only reviewed code from `main`, and the run-time rules. Device: [FILL: device and OS].
 
 ## The session shell
 
-Every command in `03` and `04` runs in zsh, in one terminal window with no AI tool in it. Interactive zsh does not treat `#` as a comment, so the blocks have none. Fill in the three paths: absolute (they start with `/Users/`; never `~`, which is not expanded inside the quotes), outside every other git working tree, and not under `~/Desktop` or `~/Documents`. Paste this block at the start of each sitting:
+Every command in `03` and `04` runs in zsh, in one terminal window with no AI tool in it, in the checkout. Paste this at the start of each sitting:
 
 ```zsh
-umask 077; setopt pipefail; ulimit -c 0
-DATA_DIR='<DATA_DIR>'; BACKUP_DIR='<BACKUP_DIR>'; CHECKOUT='<CHECKOUT>'
-[[ $DATA_DIR == /* && $BACKUP_DIR == /* && $CHECKOUT == /* ]] || print -r -- 'STOP: the three paths must start with /'
-R() { GIT_TERMINAL_PROMPT=0 uv run --frozen python -m airtimesat_platform.recorder "$@"; }
-dry_secrets() { if [[ -t 1 ]]; then print -u2 -r -- 'STOP: pipe this into R'; return 1; fi; age -d "$DATA_DIR/masker-keys.json.age"; }
-live_secrets() { if [[ -t 1 ]]; then print -u2 -r -- 'STOP: pipe this into R'; return 1; fi; stty -echo; { age -d "$DATA_DIR/masker-keys.json.age" && age -d "$DATA_DIR/sitest.json.age"; } | jq -cs 'if map(type) == ["object", "object"] then add else error("expected two JSON objects") end'; stty echo; }
-setopt | grep -Ei 'xtrace|verbose|allexport'
-whence -w read print printf R dry_secrets live_secrets
+umask 077
+R() { uv run --frozen python -m airtimesat_platform.recorder "$@"; }
 ```
-
-Expected: no `STOP`; the `grep` prints nothing (with xtrace, verbose or allexport on, zsh would print or export values); `whence` prints `read: builtin`, `print: builtin`, `printf: builtin`, then `function` for `R`, `dry_secrets` and `live_secrets`. Anything else (an alias or a function named `read` or `print`): stop.
-
-- `R` runs in the checkout (`cd "$CHECKOUT"`). `GIT_TERMINAL_PROMPT=0` (not a secret) makes the recorder's `git fetch` fail with `GIT_FETCH_FAILED` rather than ask for credentials next to an `age` prompt.
-- `dry_secrets` and `live_secrets` decrypt the files of Part D into a pipe for `R run` (`04`), and refuse to print to the screen. `live_secrets` keeps echo off while age asks twice, so a passphrase typed early never shows. If the screen stops showing what you type after an interrupted run, type `stty echo` and press Enter.
 
 Rules for secrets:
 
-1. They move only through pipes, the zsh builtins `read`, `print` and `printf`, and shell variables unset right after. Never as a command-line argument, an environment variable, a file in clear, terminal output or shell history. Never `print -s` or `print -z` with a secret, and never `AGE_PASSPHRASE` or `age-plugin-batchpass`.
-2. An `age -d` outside `dry_secrets` and `live_secrets` is always the first stage of the pipe written here: on its own it prints the decrypted JSON on the screen. If decrypted JSON ever shows: press Command-K, close the window, and follow [`06`](06_incidents.md) case 3 if it was the SITEST file.
-3. Type a passphrase only after its prompt appears, by hand from the Keeper app; never paste it.
-4. Never press Enter on an empty `age -p` prompt: age then makes up a passphrase and prints it (`age: using autogenerated passphrase …`). If that happens: press Command-K, delete only the file that step just wrote (`rm "$DATA_DIR/<FILE>.age"`), and repeat the step.
-5. After Ctrl-C or an error in a block that reads a secret, run `unset SU SK SA SJ X`, or close the window.
+1. The recorder asks for everything it needs, at hidden prompts. Never put a secret in a command-line argument, an environment variable, a file in clear, terminal output or shell history, and never use `AGE_PASSPHRASE` or `age-plugin-batchpass`.
+2. Type the age passphrase only after its prompt appears, by hand from the Keeper app; never paste it.
+3. Never press Enter on an empty new-passphrase prompt: age then makes one up and prints it (`age: using autogenerated passphrase …`). If that happens during the first `R init`: press Command-K, delete the three `.age` files in `data_dir` and `~/.config/airtimesat/recorder.toml`, and run `R init` again; nothing has used them yet. If it happens during `R rekey`: do not clear the screen yet. Run `R rekey` again at once, type the printed words as the old passphrase and your new Keeper passphrase twice, then press Command-K. Delete both `retired-<UTC>` folders only at [`06`](06_incidents.md) case 7 step 2.4.
+4. Never run `age -d` on these files yourself: on its own it prints the decrypted content on the screen. The one exception is the vault restore of [`06`](06_incidents.md) case 7, which writes to a file (`-o`), never the screen. If decrypted content ever shows: press Command-K, close the window, and follow [`06`](06_incidents.md) case 3 if it was the SITEST file.
 
 ## Part A. The machine
 
-1. **Disk encryption** that also covers swap and hibernation. `fdesetup status` prints `FileVault is On.`, and `sysctl vm.swapusage` ends in `(encrypted)`. Automatic OS updates and a screen lock.
-2. **Four folders:** the checkout (`$CHECKOUT`), the recorder data folder (`$DATA_DIR`: the vault, the run log and the `.age` files), the backup folder (`$BACKUP_DIR`) and the manual-call folder for raw files [FILL: path]. Create them with mode 700, and exclude them from Time Machine; each `isexcluded` prints `[Excluded]`:
+1. **Disk encryption** that also covers swap and hibernation (FileVault), automatic OS updates and a screen lock. `sysctl vm.swapusage` ends in `(encrypted)`.
+2. **Tools:** git, gh, uv, curl, OpenSSL, `dig`, SoapUI, and age 1.1.0 or later (it ships `age-keygen`): `brew install age`. gitleaks must be exactly 8.21.2, the version CI and the hook pin (Homebrew's is later, and its rules may differ). In a new empty folder (`x64` instead of `arm64` on an Intel Mac):
 
    ```zsh
-   mkdir -p "$DATA_DIR" "$BACKUP_DIR" "$CHECKOUT" '<MANUAL_DIR>' && chmod 700 "$DATA_DIR" "$BACKUP_DIR" "$CHECKOUT" '<MANUAL_DIR>'
-   for d in "$DATA_DIR" "$BACKUP_DIR" "$CHECKOUT" '<MANUAL_DIR>'; do tmutil addexclusion "$d"; tmutil isexcluded "$d"; done
+   V=8.21.2; A=darwin_arm64; U=https://github.com/gitleaks/gitleaks/releases/download/v$V
+   curl -fsSLO "$U/gitleaks_${V}_$A.tar.gz" && curl -fsSLO "$U/gitleaks_${V}_checksums.txt"
+   grep " gitleaks_${V}_$A.tar.gz\$" "gitleaks_${V}_checksums.txt" | shasum -a 256 -c
+   tar -xzf "gitleaks_${V}_$A.tar.gz" gitleaks && sudo install -m 755 gitleaks /usr/local/bin/gitleaks
    ```
 
-   Keep them, and SoapUI's settings and logs, out of cloud sync and online backup. Never start an AI tool's session in these folders.
-3. **Core dumps off.** `ulimit -c 0` in your shell profile, and `kern.coredump=0` for the system:
+   `shasum` must print `OK`; anything else: stop and delete the folder. `gitleaks version` prints `8.21.2`.
+3. **The checkout.** `gh repo clone Globalsat-Group/airtimesat-platform <CHECKOUT>` (an absolute path outside every other git working tree, not under `~/Desktop` or `~/Documents`), then stay on `main`. Before any code runs, do the merge check of Part C step 1. Note `HEAD`'s SHA as your last checked SHA, in [FILL: your log, or a Keeper note].
+4. **Environment and hook.** In the checkout, `uv sync --frozen`, then `uvx pre-commit install`. The hook runs ruff, the leak scan and gitleaks before each commit (design §8.3).
+5. **No TLS inspection** (proxy, VPN or endpoint security) applies to traffic to SITEST [confirm with whoever manages the laptop]. Python's TLS to SITEST passed `01` step 6; redo that check from this checkout once, and whenever `uv` picks another Python interpreter.
+6. **Folders.** Choose three absolute folders outside the checkout, not under `~/Desktop` or `~/Documents`: `<DATA_DIR>` (the vault, the run log and the `.age` files), `<BACKUP_DIR>` (vault backups) and `<MANUAL_DIR>` (raw responses of manual calls, `01`). Before any secret or raw response exists:
 
    ```zsh
-   print -r -- 'ulimit -c 0' >> ~/.zshrc
-   sudo sysctl kern.coredump=0
-   print -r -- 'kern.coredump=0' | sudo tee -a /etc/sysctl.conf
+   mkdir -p -m 700 <DATA_DIR> <BACKUP_DIR> <MANUAL_DIR> && chmod 700 <DATA_DIR> <BACKUP_DIR> <MANUAL_DIR>
+   tmutil addexclusion <CHECKOUT> <DATA_DIR> <BACKUP_DIR> <MANUAL_DIR>
    ```
 
-   Whether current macOS still reads `/etc/sysctl.conf` at boot is unverified: after the next restart, `sysctl kern.coredump` must print `kern.coredump: 0`; if not, repeat the `sudo sysctl` line after each restart.
-4. **The checkout.** `gh repo clone Globalsat-Group/airtimesat-platform "$CHECKOUT"`, then stay on `main`. Before any code runs, do the merge check of Part C step 1. Note `HEAD`'s SHA as your last checked SHA, in [FILL: your log in the manual-call folder, or a Keeper note].
-5. **Environment and hook.** In the checkout, `uv sync --frozen`, then `uvx pre-commit install`. The hook runs ruff, the leak scan and gitleaks before each commit (design §8.3).
-6. **Tools:** git, gh, uv, age 1.1.0 or later (it ships `age-keygen`), jq, gitleaks 8.21.2, curl, OpenSSL, `dig`, SoapUI. If you use Homebrew, `brew install age jq`. Take gitleaks 8.21.2, the version CI and the hook pin, from its release assets after checking the checksum; Homebrew's gitleaks is a later version whose rules may differ from CI. `recorder run` calls the gitleaks on your `PATH` (`dir` needs 8.19 or later). Check with `age --version`, `jq --version` and `gitleaks version`.
-7. **No TLS inspection** (proxy, VPN or endpoint security) applies to traffic to SITEST [confirm with whoever manages the laptop]. Python's TLS to SITEST passed `01` step 6; redo that check from this checkout once, and whenever `uv` picks another Python interpreter.
-8. **Clipboard.** Turn Handoff off: System Settings > General > AirDrop & Handoff (macOS 15) or AirDrop & Continuity (macOS 26 and later), "Allow Handoff between this Mac and your iCloud devices". That also stops Universal Clipboard. No clipboard history tool runs while a secret is on the clipboard (as in `01` "SoapUI calls"): quit any clipboard manager, and on macOS 26 and later turn off Spotlight's clipboard history [confirm the setting on your version]. In the Keeper desktop app, set Settings > General > Clipboard Expiration [FILL: duration].
+   `tmutil isexcluded <folder>` prints `[Excluded]` for each of the four. `R init` (Part D) accepts these existing folders.
+7. **`R doctor`** (in the session shell). It checks, read-only: FileVault, core dumps off, the tools and their versions, a clean checkout on `main`, and once Part D is done the configuration, the folders, the `.age` files and their modes, and Time Machine exclusions. It decrypts nothing and changes nothing. Each `FIX` line names its command; the usual ones:
+   - `core-dumps`: add `ulimit -c 0` to `~/.zshrc`, and run it in this shell.
+   - `kern.coredump`: `sudo sysctl kern.coredump=0`, and `print -r -- 'kern.coredump=0' | sudo tee -a /etc/sysctl.conf`. Whether macOS still reads that file at boot is unverified: run `R doctor` after each restart.
+   - `time-machine:<folder>`: `tmutil addexclusion <folder>`.
+   - Before Part D, doctor prints one `FIX config` line naming `recorder init`, and skips the folder, file and Time Machine checks: expected.
 
-Done when the disk is encrypted, the folders exist and are out of sync and backup, core dumps are off, the merge check passed, the hook and tools are installed, Handoff is off and no clipboard history tool runs.
+   Then do the four `MANUAL` lines by hand:
+   - **Handoff off:** System Settings > General > AirDrop & Handoff (macOS 15) or AirDrop & Continuity (macOS 26 and later), "Allow Handoff between this Mac and your iCloud devices". That also stops Universal Clipboard.
+   - **No clipboard history tool** runs while a secret is on the clipboard: quit any clipboard manager, and on macOS 26 and later turn off Spotlight's clipboard history [confirm the setting on your version]. In the Keeper desktop app, set Settings > General > Clipboard Expiration [FILL: duration].
+   - **Secure Keyboard Entry** on in the terminal app (Terminal > Secure Keyboard Entry).
+   - **Keeper and escrow copies:** after Part D.
 
-## Part B. Keeper, the passphrase and the backup identity
+   Keep the checkout, `<DATA_DIR>`, `<BACKUP_DIR>`, `<MANUAL_DIR>` and SoapUI's settings and logs out of cloud sync and online backup, Time Machine included. Never start an AI tool's session in these folders.
+
+Done when `R doctor` prints no `FIX` other than those Part D clears, and the `MANUAL` items hold.
+
+## Part B. Keeper
 
 The Keeper app only; there is no Keeper CLI. Record names are not secrets.
 
-1. **The SITEST credential** stays in its Keeper record, the canonical copy; manual SoapUI calls copy from it (`01`). Delete the delivery e-mail and any attachment. Part D step 2 makes the recorder's encrypted working copy, which never leaves the data folder.
-2. **The age passphrase.** Create a Keeper record "Recorder age passphrase" and fill its password with Keeper's generator, long [FILL: length or word count]. One passphrase protects the `.age` files.
-3. **The age backup identity, once.** Generated straight into an encrypted file, never in clear. age asks for a new passphrase twice; `age-keygen` prints `Public key: age1…` (public):
+1. **The SITEST credential** stays in its Keeper record, the canonical copy; manual SoapUI calls copy from it (`01`). Delete the delivery e-mail and any attachment. Part D makes the recorder's encrypted working copy, which never leaves `data_dir`.
+2. **The age passphrase.** Create a Keeper record "Recorder age passphrase" and fill its password with Keeper's generator, long [FILL: length or word count]. It protects only `recorder-identity.age`, which opens the other files.
+3. **Records for attachments:** "Recorder age files" (Part D step 3) and "Recorder vault backups" (`04`, design §13 #20). The passphrase lives in Keeper too, so it is not the optional second layer kept outside Keeper [FILL: second layer, yes or no].
 
-   ```zsh
-   if [[ -e "$DATA_DIR/backup-identity.age" ]]; then print -r -- 'STOP: backup-identity.age exists'; else age-keygen | age -p -o "$DATA_DIR/backup-identity.age"; fi
-   ```
-
-   Then, as a separate paste (age asks once), derive the public recipient from the file, which also proves it decrypts:
-
-   ```zsh
-   age -d "$DATA_DIR/backup-identity.age" | age-keygen -y > "$DATA_DIR/backup-recipient.txt"; cat "$DATA_DIR/backup-recipient.txt"
-   ```
-
-   It prints the same `age1…` key; it goes into the configuration (Part D step 4). `age -o` overwrites an existing file, so the guard stops a second run: losing this file makes every vault backup unreadable.
-4. **Copies in Keeper.** Create a Keeper record "Recorder age files" and attach `backup-identity.age` to it by hand in the Keeper app (`open "$DATA_DIR"` shows the folder in Finder). `masker-keys.json.age` follows in Part D. `sitest.json.age` is never copied: if it is lost, make it again from the SITEST record.
-5. **Escrow** the passphrase and copies of `backup-identity.age` and, after Part D, `masker-keys.json.age`: [FILL: sealed copy or Keeper break-glass record], custodian [FILL: name]. Hand the passphrase over only on paper in a sealed envelope, or as a Keeper share of a record that holds only it; never by e-mail, chat or a printer. The passphrase also opens `sitest.json.age`, so the escrow never includes that file, the SITEST record or Keeper emergency access to them.
-6. **Backup target:** a Keeper record "Recorder vault backups" holding the age-encrypted vault backups as file attachments (design §13 #20). The age passphrase lives in Keeper too, so it is not the optional second layer kept outside Keeper [FILL: second layer, yes or no].
-
-Done when the passphrase record exists, `backup-identity.age` is in the data folder, in Keeper and in escrow, and `backup-recipient.txt` holds its `age1…` recipient.
+Done when the passphrase record and the two attachment records exist.
 
 ## Part C. Before every run and every manual call
 
-1. `cd "$CHECKOUT"`, `git fetch origin main`, then `git log --first-parent --oneline <LAST_CHECKED_SHA>..origin/main` (the first time, `git log --first-parent --oneline origin/main`: every entry). Open each merge on GitHub and confirm it is a PR you reviewed and merged. Any other merge: stop, and follow [`06`](06_incidents.md) case 5. The fetch must work without a prompt.
+1. `git fetch origin main`, then `git log --first-parent --oneline <LAST_CHECKED_SHA>..origin/main` (the first time, `git log --first-parent --oneline origin/main`: every entry). Open each merge on GitHub and confirm it is a PR you reviewed and merged. Any other merge: stop, and follow [`06`](06_incidents.md) case 5. The fetch must work without a prompt.
 2. Only then `git merge --ff-only origin/main` and `uv sync --frozen`, and note `git rev-parse HEAD` as the new last checked SHA.
-3. `git status` is clean.
+3. `R doctor` prints no `FIX`.
 4. During the run or call:
    - no AI tool in any window of the terminal app;
    - AI features that send screen, terminal or clipboard content to a cloud service are off;
-   - Handoff (clipboard sync to other devices) is off, and no clipboard history tool runs;
+   - Handoff is off, and no clipboard history tool runs;
    - no screen sharing, and no screen-recording or screen-history tool runs while the passphrase is shown in Keeper; hide it again right after typing;
-   - Secure Keyboard Entry is on in the terminal app (Terminal > Secure Keyboard Entry);
+   - Secure Keyboard Entry is on;
    - Keeper is unlocked only for the run and locked right after;
-   - the age passphrase is typed by hand, never pasted, and the clipboard holds no secret (`pbcopy < /dev/null`).
+   - the passphrase is typed by hand, and the clipboard holds no secret (`pbcopy < /dev/null`).
 
-Done when every merge since your last checked SHA is one you reviewed, and the run-time rules hold.
+Done when every merge since your last checked SHA is one you reviewed, `R doctor` is clean, and the run-time rules hold.
 
-## Part D. Masking keys, the SITEST file and the recorder configuration
+## Part D. The recorder's files, once
 
-In the session shell, in the checkout, after Part C, with Keeper unlocked.
+In the session shell, in the checkout, after Part C steps 1 and 2, with Keeper unlocked.
 
-1. **Masking keys, once.** `R keys init` writes four new 256-bit keys (`masker.k_mask`, `masker.vault_key`, `masker.known_value_key`, `masker.inventory_key`, hex) as one JSON object, only to a pipe. Pipe it straight into age (a new passphrase prompt, asked twice):
-
-   ```zsh
-   if [[ -e "$DATA_DIR/masker-keys.json.age" ]]; then print -r -- 'STOP: masker-keys.json.age exists'; else R keys init | age -p -o "$DATA_DIR/masker-keys.json.age"; fi
-   ```
-
-   Then, as a separate paste, check the names and take the file's digest (of the ciphertext, not a secret):
+1. **`R init`**, with the `<DATA_DIR>` and `<BACKUP_DIR>` of Part A step 6:
 
    ```zsh
-   age -d "$DATA_DIR/masker-keys.json.age" | jq -e 'if type == "object" then keys == ["masker.inventory_key", "masker.k_mask", "masker.known_value_key", "masker.vault_key"] else error("not a JSON object") end'
-   shasum -a 256 "$DATA_DIR/masker-keys.json.age"
+   R init --data-dir <DATA_DIR> --backup-dir <BACKUP_DIR>
    ```
 
-   The check prints `true`; note the digest in [FILL: your log]. `incorrect passphrase` is a typing error: run the check again. On this first creation only, anything else: `rm "$DATA_DIR/masker-keys.json.age"` and repeat the step; those keys were never used. Once a dry run has used the file, never delete, overwrite or regenerate it, and never run `keys init` again unless [`06`](06_incidents.md) case 4 says so: new keys change every surrogate.
-2. **The SITEST file, once.** At each prompt, press the copy button in the Keeper SITEST record and paste; nothing echoes. Press Enter at the third prompt if the record has no SP account number:
+   It checks that the checkout is clean and on `origin/main`, creates both folders with mode 700, and then asks, in this order:
+   - `SITEST username`, `SITEST secret key`, `SP account number (Enter if none)`: press the copy button in the Keeper SITEST record and paste; nothing echoes. A value that is empty, has a control character or starts or ends with a space is refused with a code that names the field, never the value; run `R init` again.
+   - age's new passphrase, twice: type the "Recorder age passphrase" by hand.
 
-   ```zsh
-   IFS= read -rs 'SU?SITEST username: '; print
-   IFS= read -rs 'SK?SITEST secret key: '; print
-   IFS= read -rs 'SA?SP account number (Enter if none): '; print
-   SJ=$(printf '%s\n' "$SU" "$SK" "$SA" | jq -cRn '[inputs] | if .[0] == "" or .[1] == "" then error("username or secret key empty") elif any(.[]; test("[[:cntrl:]]|^ | $")) then error("a value has a control character or an edge space") else {"sitest.iws_username": .[0], "sitest.secret_key": .[1]} + (if .[2] == "" then {} else {"sitest.sp_account_number": .[2]} end) end'); unset SU SK SA; pbcopy < /dev/null
-   ```
+   It then writes, each only if missing and never over an existing file: `recorder-identity.age` (a new age identity under your passphrase), `~/.config/airtimesat/recorder.toml` (mode 600: the two folders, the checkout and the identity's public recipient; never a secret), `masker-keys.json.age` (four new masking keys) and `sitest.json.age` (the SITEST values), both encrypted to the identity. It prints `CREATED` or `EXISTS` per file, `RECIPIENT age1…` and `MASKER_KEYS_SHA256 <hex>`. Clear the clipboard: `pbcopy < /dev/null`.
+2. **Note `RECIPIENT` and `MASKER_KEYS_SHA256`** (both public) in the notes of the "Recorder age files" Keeper record, and the digest in [FILL: your log]; `06` case 7 needs them to rebuild a lost configuration and to check a restored keys file. `R init` can run again from a clean checkout on `main` (Part C): it makes only what is missing, and prints the same recipient and digest.
+3. **Copies.** Attach `recorder-identity.age` and `masker-keys.json.age` to the "Recorder age files" record by hand in the Keeper app (`open <DATA_DIR>` shows the folder in Finder). Escrow the passphrase and copies of the same two files: [FILL: sealed copy or Keeper break-glass record], custodian [FILL: name]. Hand the passphrase over only on paper in a sealed envelope, or as a Keeper share of a record that holds only it; never by e-mail, chat or a printer. The passphrase also opens `sitest.json.age`, so the escrow never includes that file, the SITEST record or Keeper emergency access to them. `sitest.json.age` is never copied anywhere.
+4. **`R doctor`** prints no `FIX`.
 
-   Then, as a separate paste, encrypt it (a passphrase prompt, asked twice; type the same passphrase):
+Refusals before any prompt:
+- `INIT_PATH_NOT_ABSOLUTE <key>` or `INIT_PATH_IN_CHECKOUT <key>`: fix the argument. `CODE_NOT_FROM_CHECKOUT`: run `R` from the checkout. `CHECKOUT_NOT_CLEAN`, `HEAD_NOT_ON_MAIN`, `GIT_FETCH_FAILED`: Part C.
+- `INIT_CONFIG_MISMATCH <key>`: the configuration names other folders or another checkout. Fix the arguments; init never rewrites it.
+- `INIT_CONFIG_MISSING` or `INIT_IDENTITY_MISSING`: one exists without the other. `INIT_FILE_WITHOUT_IDENTITY <file>`: a secrets file exists, but no identity or configuration, and a new identity could not open it. See [`06`](06_incidents.md) case 7.
+- `INIT_KEYS_MISSING` (the identity exists, `masker-keys.json.age` does not) or `INIT_VAULT_EXISTS` (a vault exists, the keys file does not): never mint keys next to an existing identity or vault. Restore the file from Keeper (`06` case 7). New keys are made only with `--new-keys`, in `06` case 4.
 
-   ```zsh
-   if [[ -e "$DATA_DIR/sitest.json.age" ]]; then print -r -- 'STOP: sitest.json.age exists'; elif [[ -n $SJ ]]; then print -r -- "$SJ" | age -p -o "$DATA_DIR/sitest.json.age"; fi; unset SJ
-   ```
+At or after a prompt: `INIT_NO_TERMINAL` (run it in a terminal, not a pipe); `INIT_SITEST_EMPTY` or `INIT_SITEST_INVALID` (above); `INIT_AGE_FAILED <file>` (age printed why, for example the two passphrases differ; nothing was written for that file and its temporary file is removed). After `INIT_AGE_FAILED`, run `R init` again with the same arguments: it asks only for what is missing. Only if the file was `masker-keys.json.age`, add `--new-keys`: the identity it had just made exists, and no keys were made yet. Any other code after a first `R init` printed `CREATED recorder-identity.age` (for example `INIT_CONFIG_UNWRITABLE`, `INIT_WRITE_FAILED` or `INIT_FILE_EXISTS`): nothing has used what it made, so fix the cause, delete the files it reported `CREATED` (and `recorder.toml` if it was `CREATED`), and run `R init` again.
 
-   Then check it (age asks once):
+**To redo the SITEST file** (a rotated secret, `06` case 3): `rm <DATA_DIR>/sitest.json.age`, then `R init` with the same arguments. It asks only for the SITEST values, and no passphrase.
 
-   ```zsh
-   age -d "$DATA_DIR/sitest.json.age" | jq -ce 'if type == "object" then keys else error("not a JSON object") end'
-   pbpaste | wc -c
-   ```
-
-   It prints the two or three `sitest.` names, never a value, then `0`. A `jq: error` names no value and writes no file: `unset SU SK SA SJ` and run the step again. The recorder uses these values exactly as pasted. `sitest.json.age` holds nothing that is not in Keeper: to redo it, `rm "$DATA_DIR/sitest.json.age"` first.
-3. **Copies in Keeper.** Attach `masker-keys.json.age` to the "Recorder age files" record by hand in the Keeper app, and give the escrow its copy (Part B step 5). `sitest.json.age` stays only in the data folder.
-4. **Configuration.** `~/.config/airtimesat/recorder.toml` holds exactly four keys, absolute paths and the public recipient only; unknown keys are refused, and no secret ever goes here:
-
-   ```zsh
-   mkdir -p -m 700 ~/.config/airtimesat
-   cat > ~/.config/airtimesat/recorder.toml <<EOF
-   data_dir = "$DATA_DIR"
-   checkout = "$CHECKOUT"
-   backup_recipient = "$(cat "$DATA_DIR/backup-recipient.txt")"
-   backup_dir = "$BACKUP_DIR"
-   EOF
-   cat ~/.config/airtimesat/recorder.toml
-   R backup
-   ```
-
-   `data_dir` and `backup_dir` must be outside the checkout. `R backup` prints `REFUSED VAULT_MISSING`: the configuration is valid and there is no vault yet. The first run, dry or live, creates `vault.sqlite` in `data_dir`, mode 0600; `backup` and `incident clear` never create one. Any `CONFIG_*` code: fix the file.
-5. **Secrets for a run.** `dry_secrets` (the masker-keys file only) and `live_secrets` (both files, merged into one object) from the session shell pipe them into `R run` ([`04`](04_recording_session.md)), as one JSON object of name-to-value pairs ([`common/secrets_stdin.py`](../../src/airtimesat_platform/common/secrets_stdin.py)).
-
-Done when both files decrypt to the expected names, `ls -l "$DATA_DIR"` shows `-rw-------` for each `.age` file, the masker-keys digest is noted, its copies are in Keeper and escrow, and `R backup` prints `REFUSED VAULT_MISSING`.
+Done when `R init` printed `EXISTS` or `CREATED` for all four files, the digest is noted, the two files are in Keeper and escrow, and `R doctor` is clean.
 
 ## Optional hardening
 

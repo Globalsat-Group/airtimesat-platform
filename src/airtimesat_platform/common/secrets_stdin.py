@@ -1,12 +1,12 @@
 """Secrets read once from standard input.
 
-``StdinSecretsProvider`` reads named secrets piped by the Keeper CLI into ``SecretValue``
+``StdinSecretsProvider`` reads named secrets piped on standard input into ``SecretValue``
 objects for one recorder run: no file, no environment variable, no AWS (design
-``docs/design/s2-recorder-masker.md`` §6.2, §7.2).
+``docs/design/s2-recorder-masker.md`` §6.2, §7.2). The recorder also parses each decrypted
+age file through ``from_stream`` (``recorder.agefiles``), so both paths apply the same checks.
 
 Input format: one JSON object whose keys are secret names and whose values are non-empty
-strings, for example ``{"sitest.iws_username": "...", "sitest.secret_key": "..."}``. The CTO
-shapes the Keeper CLI's output into it (for example with ``jq``) in the pipe, never in a file.
+strings, for example ``{"sitest.iws_username": "...", "sitest.secret_key": "..."}``.
 Names are lower-case ``[a-z0-9._-]``. Duplicate names, other value types and input over
 64 KiB are refused.
 

@@ -10,10 +10,12 @@ import io
 import ipaddress
 import json
 import secrets
+import shutil
 import socket
 import sqlite3
 import string
 import subprocess
+import sys
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -424,11 +426,18 @@ class Harness:
             return Vault(store, self.keys(), clock=lambda: self.now).issue(type_name, real)
 
     def run(
-        self, plan: Path, *, dry_run: bool = False, sitest: bool | None = None
+        self,
+        plan: Path,
+        *,
+        dry_run: bool = False,
+        sitest: bool | None = None,
+        terminal: bool | None = None,
     ) -> tuple[int, str]:
         """Run ``recorder run`` with the fakes; return the exit code and the terminal text.
 
         The SITEST record is piped for a live run only, unless ``sitest`` says otherwise.
+        With ``terminal`` set, the recorder picks the secrets itself: from the age files in
+        ``data_dir`` (``True``, a terminal) or from standard input (``False``).
         """
         out = io.StringIO()
         with_sitest = not dry_run if sitest is None else sitest
@@ -453,11 +462,14 @@ class Harness:
             out=out,
             field_map_source=lambda: self.field_map,
             now=lambda: self.now,
-            secrets=lambda: StdinSecretsProvider.from_stream(io.BytesIO(data)),
+            secrets=None
+            if terminal is not None
+            else lambda: StdinSecretsProvider.from_stream(io.BytesIO(data)),
             port_factory=port_factory,
             scanner=scanner,
             monotonic=self.monotonic,
             code_file=self.code_file,
+            terminal=lambda: bool(terminal),
         )
         return code, out.getvalue()
 
@@ -487,3 +499,141 @@ def harness_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Harness:
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(gitconfig))
     monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
     return Harness(tmp_path)
+
+
+# ---------------------------------------------------------------- fake age and system tools
+#
+# Shared by tests/recorder (init, doctor, run from the age files) and tests/leak. One Python
+# script, installed under each tool's name on a PATH that holds only it and git: no real age,
+# gitleaks or macOS tool is ever run. "Encryption" is a reversible XOR, enough to tell
+# ciphertext from clear text. Every call, and every test prompt, is appended to one log.
+
+FAKE_TOOL = r"""
+import os, re, secrets, sys
+tool = os.path.basename(sys.argv[0])
+args = sys.argv[1:]
+env = os.environ.get
+def log(entry):
+    with open(env("FAKE_LOG"), "a", encoding="utf-8") as handle:
+        handle.write(entry + "\n")
+def flip(data):
+    return bytes(b ^ 0x5A for b in data)
+def stem(path):
+    return re.sub(r"^\.(.*)\.[0-9a-f]{16}\.tmp$", r"\1", os.path.basename(path))
+def fail(message):
+    sys.stderr.write("age: error: " + message + "\n")
+    sys.exit(1)
+if tool == "age" and args == ["--version"]:
+    print(env("FAKE_AGE_VERSION", "v1.3.2"))
+elif tool == "age" and args[0] in ("-p", "-r"):
+    out = args[-1]
+    data = sys.stdin.buffer.read()
+    log(f"age {args[0]} {stem(out)}")
+    head = b"fake-scrypt" if args[0] == "-p" else b"fake-x25519 " + args[1].encode()
+    with open(out, "wb") as handle:
+        handle.write(head + b"\n" + flip(data).hex().encode())
+    if env("FAKE_AGE_FAIL") == args[0]:
+        fail("passphrases didn't match")
+elif tool == "age" and args[:2] == ["-d", "-i"]:
+    identity = sys.stdin.buffer.read()
+    log(f"age -d -i {os.path.basename(args[3])}")
+    head, body = open(args[3], "rb").read().split(b"\n", 1)
+    public = re.search(rb"# public key: (\S+)", identity)
+    if env("FAKE_AGE_FAIL") == "-i" or not public or head != b"fake-x25519 " + public[1]:
+        fail("no identity matched any of the recipients")
+    sys.stdout.buffer.write(flip(bytes.fromhex(body.decode())))
+elif tool == "age" and args[0] == "-d":
+    log(f"age -d {os.path.basename(args[1])}")
+    head, body = open(args[1], "rb").read().split(b"\n", 1)
+    if env("FAKE_AGE_FAIL") == "-d" or head != b"fake-scrypt":
+        fail("incorrect passphrase")
+    sys.stdout.buffer.write(flip(bytes.fromhex(body.decode())))
+elif tool == "age-keygen":
+    log("age-keygen")
+    if env("FAKE_AGE_FAIL") == "keygen":
+        sys.exit(1)
+    public = "age1" + "".join(secrets.choice("023456789acdefghjklmnpqrstuvwxyz") for _ in range(58))
+    print("# created: 2026-10-22T12:00:00Z")
+    print("# public key: " + public)
+    print("AGE-SECRET-KEY-1" + secrets.token_hex(29).upper())
+    sys.stderr.write("Public key: " + public + "\n")
+elif tool == "fdesetup":
+    print(env("FAKE_FILEVAULT", "FileVault is On."))
+elif tool == "sysctl":
+    print(env("FAKE_COREDUMP", "0"))
+elif tool == "tmutil":
+    included = env("FAKE_TM_INCLUDED", "")
+    state = "[Included]" if included and args[1].endswith(included) else "[Excluded]"
+    print(state + "  " + args[1])
+elif tool == "gitleaks":
+    print(env("FAKE_GITLEAKS_VERSION", "8.21.2"))
+else:
+    sys.exit(2)
+"""
+FAKE_TOOLS = ("age", "age-keygen", "fdesetup", "sysctl", "tmutil", "gitleaks")
+
+
+class FakeTools:
+    """The fake tools' folder, their call log, and the XOR "encryption" they use."""
+
+    def __init__(self, tmp: Path) -> None:
+        """Write the tools into ``tmp/bin``, with a link to the real git."""
+        self.bin = tmp / "bin"
+        self.bin.mkdir()
+        self.log_file = tmp / "fake-tools.log"
+        self.log_file.touch()
+        for name in FAKE_TOOLS:
+            tool = self.bin / name
+            tool.write_text(f"#!{sys.executable}\n{FAKE_TOOL}", encoding="utf-8")
+            tool.chmod(0o700)
+        real_git = shutil.which("git")
+        assert real_git is not None
+        (self.bin / "git").symlink_to(real_git)
+
+    def log(self) -> list[str]:
+        """Return the calls and prompts so far, in order."""
+        return self.log_file.read_text(encoding="utf-8").splitlines()
+
+    def prompt(self, answers: dict[str, str]) -> Callable[[str], str]:
+        """Return a ``getpass`` stand-in that logs each prompt and answers from ``answers``."""
+
+        def ask(text: str) -> str:
+            with self.log_file.open("a", encoding="utf-8") as handle:
+                handle.write(f"prompt {text.split(' (')[0].rstrip(': ')}\n")
+            return answers[text]
+
+        return ask
+
+    @staticmethod
+    def decrypt(path: Path) -> bytes:
+        """Return the clear text of a fake-encrypted file."""
+        body = path.read_bytes().split(b"\n", 1)[1]
+        return bytes(b ^ 0x5A for b in bytes.fromhex(body.decode()))
+
+    @staticmethod
+    def encrypt(path: Path, head: str, data: bytes) -> None:
+        """Write a fake-encrypted file: ``fake-scrypt`` or ``fake-x25519 <recipient>``."""
+        path.write_bytes(head.encode() + b"\n" + bytes(b ^ 0x5A for b in data).hex().encode())
+        path.chmod(0o600)
+
+    def write_files(self, data_dir: Path, values: dict[str, str]) -> None:
+        """Write the three age files for ``values``, to the harness's recipient."""
+        data_dir.mkdir(mode=0o700, exist_ok=True)
+        identity = f"# public key: {RECIPIENT}\nAGE-SECRET-KEY-1{'F' * 58}\n".encode()
+        self.encrypt(data_dir / "recorder-identity.age", "fake-scrypt", identity)
+        for name, prefix in (("masker-keys.json.age", "masker."), ("sitest.json.age", "sitest.")):
+            chosen = {k: v for k, v in values.items() if k.startswith(prefix)}
+            self.encrypt(data_dir / name, f"fake-x25519 {RECIPIENT}", json.dumps(chosen).encode())
+
+
+@pytest.fixture(name="fake_tools")
+def fake_tools_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> FakeTools:
+    """Return the fake tools, alone on ``PATH`` with git."""
+    tools = FakeTools(tmp_path)
+    monkeypatch.setenv("PATH", str(tools.bin))
+    monkeypatch.setenv("FAKE_LOG", str(tools.log_file))
+    for name in ("FAKE_AGE_FAIL", "FAKE_AGE_VERSION", "FAKE_FILEVAULT", "FAKE_COREDUMP"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.delenv("FAKE_TM_INCLUDED", raising=False)
+    monkeypatch.delenv("FAKE_GITLEAKS_VERSION", raising=False)
+    return tools

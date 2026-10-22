@@ -4,7 +4,9 @@ In order; any refusal before step 5 stops the run before any IWS call:
 
 1. Reviewed code only (``checkout``): a clean checkout of a commit on ``origin/main``.
 2. Process hardening, before standard input is read: no core dumps; on Linux, not dumpable.
-3. The masking keys, and for a live run the SITEST record, from standard input.
+3. The masking keys, and for a live run the SITEST record: from the age files in
+   ``data_dir`` when standard input is a terminal (``agefiles``: one passphrase prompt),
+   otherwise as one JSON object piped on standard input (``common.secrets_stdin``).
 4. Checks: ``recorder check`` again; every surrogate in the plan issued
    (``IDENTIFIER_NOT_ISSUED``, §5.5); no open incident on a planned method; for a live run,
    no pending cooldown after an earlier run's timeout (§5.8).
@@ -27,10 +29,8 @@ dry run's masked request, which is the reviewed plan's own text.
 
 import asyncio
 import contextlib
-import ctypes
 import logging
 import re
-import resource
 import signal
 import sys
 import time
@@ -73,9 +73,11 @@ from airtimesat_platform.masker.xmlsafe import (
     parse,
     serialize,
 )
+from airtimesat_platform.recorder.agefiles import load_secret_files
 from airtimesat_platform.recorder.checkout import CODE, verify_checkout
 from airtimesat_platform.recorder.config import Config
 from airtimesat_platform.recorder.errors import PlanRefusedError, RecorderError
+from airtimesat_platform.recorder.hardening import harden_process
 from airtimesat_platform.recorder.output import (
     Finding,
     Scanner,
@@ -98,7 +100,7 @@ from airtimesat_platform.recorder.store import Incident, LogRow, SqliteStore, op
 EXIT_OK: Final = 0
 EXIT_FAILED: Final = 1
 
-# Names of the masker-keys record's fields as piped by the Keeper CLI (names, not values).
+# Names of the masking keys in masker-keys.json.age, or on standard input (names, not values).
 MASKING_KEYS: Final = ("masker.k_mask", "masker.vault_key", "masker.known_value_key")
 KEY_NAMES: Final = (*MASKING_KEYS, "masker.inventory_key")
 SITEST_SECRETS: Final = (SECRET_IWS_USERNAME, SECRET_KEY)
@@ -135,7 +137,6 @@ NOT_BLOCKING: Final = frozenset(
         "KEY_REUSED",
     }
 )
-PR_SET_DUMPABLE: Final = 4
 _CODE: Final = re.compile(r"[A-Z][A-Z0-9_]{0,63}")
 BACKUP_REMINDER: Final = "Next: run `recorder backup` and attach the file to Keeper (runbook 04).\n"
 
@@ -148,17 +149,9 @@ def _utc_now() -> datetime:
     return datetime.now(UTC)
 
 
-def harden_process() -> None:
-    """No core dumps; on Linux, mark the process non-dumpable (design §5.1 step 2).
-
-    Non-dumpable also stops other processes of the same user from reading its memory. Where
-    the OS has no such call, it is skipped.
-    """
-    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
-    if sys.platform.startswith("linux"):
-        libc = ctypes.CDLL(None, use_errno=True)
-        if libc.prctl(PR_SET_DUMPABLE, 0, 0, 0, 0) != 0:
-            raise RecorderError("HARDENING_FAILED")
+def stdin_is_terminal() -> bool:
+    """Return whether standard input is a terminal (then the secrets come from the files)."""
+    return sys.stdin is not None and sys.stdin.isatty()
 
 
 # ---------------------------------------------------------------- terminal output
@@ -675,16 +668,27 @@ def run_plan(
     out: TextIO,
     field_map_source: FieldMapSource,
     now: Callable[[], datetime] = _utc_now,
-    secrets: SecretsSource = StdinSecretsProvider.from_stdin,
+    secrets: SecretsSource | None = None,
     port_factory: PortFactory = InProcessSitestPort,
     scanner: Scanner = tool_scan,
     monotonic: Callable[[], float] = time.monotonic,
     code_file: Path = CODE,
+    terminal: Callable[[], bool] = stdin_is_terminal,
 ) -> int:
     """Run a plan, or dry-run it; return the exit code (0 done, 1 refused or stopped).
 
-    ``code_file`` is a file of the running recorder; tests point it into their checkout.
+    ``secrets`` defaults to the age files when ``terminal()`` (standard input is a terminal),
+    else to standard input. ``code_file`` is a file of the running recorder; tests point it
+    into their checkout.
     """
+
+    def from_files() -> StdinSecretsProvider:
+        return load_secret_files(
+            config.data_dir, dry_run=dry_run, recipient=config.backup_recipient
+        )
+
+    if secrets is None:
+        secrets = from_files if terminal() else StdinSecretsProvider.from_stdin
     index = _Index()
     log = _Log(out, index)
     try:

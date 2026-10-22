@@ -12,7 +12,7 @@ Who to tell: a second person for any Sev1 [FILL], Legal for personal data exposu
 
 What an agent may get: the refusal code, the call id, the detector id and the element path. Never a value, raw output, the secret or a key.
 
-**If the trusted machine or Keeper may itself be compromised, start here.** From a clean device, change the Keeper master password and end its other sessions. Revoke the GitHub tokens and SSH keys the laptop held. Wipe the laptop, or move to a clean device, and redo `03` Parts A and B with a new age passphrase. Only then store new secrets or keys (cases 3, 4 and 7).
+**If the trusted machine or Keeper may itself be compromised, start here.** From a clean device, change the Keeper master password and end its other sessions. Revoke the GitHub tokens and SSH keys the laptop held. Wipe the laptop, or move to a clean device, and redo `03` Parts A and B with a new age passphrase. Then follow cases 3 and 4, and `03` Part D, which makes a new identity under the new passphrase.
 
 ## 1. `MASKING_BLOCKED` or another block
 
@@ -42,7 +42,7 @@ The same credential works on Beta, so this is also a Beta leak.
 1. Stop all runs and manual calls.
 2. Remove the exposed copy without printing it.
 3. Ask Iridium to rotate the secret (procedure and lead time unknown, re-plan §11.1 Q4). Never use `resetIWSUserPassword`.
-4. Store the new secret in its Keeper record. Delete `sitest.json.age` and make it again from the new secret (`03` Part D step 2).
+4. Store the new secret in its Keeper record. Then `rm <DATA_DIR>/sitest.json.age` and run `R init` with the same arguments: it asks only for the SITEST values, from the new record (`03` Part D, "To redo the SITEST file").
 
 Done when Iridium confirms the old secret no longer works and only the new `sitest.json.age` exists.
 
@@ -51,7 +51,7 @@ Done when Iridium confirms the old secret no longer works and only the new `site
 Committed recordings could then be de-pseudonymized (design §2.1).
 
 1. Stop all runs. Tell the people above and Legal.
-2. Move `masker-keys.json.age` and `vault.sqlite` into a new folder inside `data_dir` (`mkdir -m 700 "$DATA_DIR/retired-<UTC>"`), which stays out of sync and backup (the recorder reads only `data_dir/vault.sqlite`). Generate new keys into a new `masker-keys.json.age` (`03` Part D step 1; the next run creates a new vault), replace its Keeper and escrow copies, and take the recordings again (design §6.2).
+2. Move `masker-keys.json.age` and `vault.sqlite` into a new folder inside `data_dir` (`mkdir -m 700 <DATA_DIR>/retired-<UTC>`), which stays out of sync and backup (the recorder reads only `data_dir/vault.sqlite`). Run `R init --new-keys` with the same arguments: with no vault and no keys file, it makes new keys (the next run creates a new vault). `--new-keys` is for this step only. Note the new `MASKER_KEYS_SHA256`, replace the Keeper and escrow copies of `masker-keys.json.age`, and take the recordings again (design §6.2). If the identity's passphrase may be exposed too, follow case 7 first.
 3. Delete the old vault, the old keys file and the old backups once Legal confirms nothing must be kept.
 
 Done when the new `masker-keys.json.age` is in Keeper and escrow, and the recordings agents need are taken again.
@@ -77,25 +77,48 @@ Done when the call is recorded, a write is reported, and the cause is fixed.
 
 ## 7. The age passphrase or an `.age` file exposed or lost
 
-1. **Lost** (a deleted file, a dead disk): copy `masker-keys.json.age` or `backup-identity.age` back into `data_dir` from the "Recorder age files" Keeper record or from escrow, and check `masker-keys.json.age` against its noted digest (`03` Part D step 1). Make `sitest.json.age` again from the SITEST record (`03` Part D step 2). A lost passphrase comes back from its Keeper record or escrow. If every copy of `backup-identity.age` (data folder, Keeper, escrow) is gone, the vault backups cannot be opened: make a new identity (`03` Part B step 3), update `backup_recipient`, and run `recorder backup` at once.
-2. **Exposed passphrase** (typed into the wrong window, seen, pasted): stop all runs. Create the new passphrase in a new Keeper record, and keep the old record until this step is done. Re-encrypt the two files you keep, each in its own paste: age asks for the old passphrase once, then the new one twice.
+1. **Lost** (a deleted file, a dead disk). Restore in this order, and run `R init` only at step 1.3:
+   1. **The configuration**, if missing: `mkdir -m 700 ~/.config/airtimesat` if needed, then create `~/.config/airtimesat/recorder.toml` (mode 600) with exactly these four lines, the recipient from the notes of the "Recorder age files" Keeper record (`03` Part D step 2):
+
+      ```toml
+      data_dir = "<DATA_DIR>"
+      checkout = "<CHECKOUT>"
+      backup_recipient = "<age1… from the Keeper record>"
+      backup_dir = "<BACKUP_DIR>"
+      ```
+
+      A wrong recipient is refused at the next run with `IDENTITY_RECIPIENT_MISMATCH`. After correcting it, `rm <DATA_DIR>/sitest.json.age` if step 1.3 made it under the wrong recipient, and run `R init` again.
+   2. **`recorder-identity.age` and `masker-keys.json.age`**, if missing: copy them back into `data_dir` from the "Recorder age files" Keeper record or from escrow. The passphrase: from its Keeper record or escrow.
+   3. **`R init`** with the same arguments. It makes `sitest.json.age` again from the SITEST record if it is missing, and must print `EXISTS` for the other files and the `MASKER_KEYS_SHA256` you noted. `INIT_KEYS_MISSING`: step 1.2 is not done; never add `--new-keys` here. Another digest: stop; the keys file is not the one the vault and the recordings use.
+   4. **The vault**, if `data_dir` has no `vault.sqlite`: put the newest `vault-<UTC>.sqlite.age` from the "Recorder vault backups" record into `<BACKUP_DIR>`, then run the one `age -d` that rule 4 of `03` allows:
+
+      ```zsh
+      age -d -i <DATA_DIR>/recorder-identity.age -o <DATA_DIR>/vault.sqlite <BACKUP_DIR>/vault-<UTC>.sqlite.age
+      ```
+
+      age asks once, `Enter passphrase for identity file`. The output goes to the file (`-o`), never the screen, and the vault's values are themselves encrypted. This is also the restore test of the S2 exit (design §6.3).
+   5. `R doctor` prints no `FIX`, and `R run <plan> --dry-run` passes.
+
+   **Every copy of `recorder-identity.age` lost** (data folder, Keeper, escrow): `masker-keys.json.age`, `sitest.json.age` and every vault backup can no longer be opened, and the keys are lost. `mkdir -m 700 <DATA_DIR>/retired-<UTC>` and move into it whichever of `~/.config/airtimesat/recorder.toml`, `masker-keys.json.age`, `sitest.json.age` and `vault.sqlite` exist. Run `R init --data-dir <DATA_DIR> --backup-dir <BACKUP_DIR>`: it asks for the SITEST values and a new passphrase, and makes a new identity, configuration, keys and SITEST file. Note the new `RECIPIENT` and `MASKER_KEYS_SHA256` (`03` Part D step 2), replace the Keeper and escrow copies, delete the old vault backups (they cannot be opened), and take the recordings again, as in case 4 (design §6.2).
+2. **Exposed passphrase** (typed into the wrong window, seen, pasted): stop all runs. Create the new passphrase in a new Keeper record, and keep the old record until this step is done. Then, in the session shell, after `03` Part C:
 
    ```zsh
-   X=$(age -d "$DATA_DIR/masker-keys.json.age") && print -r -- "$X" | age -p -o "$DATA_DIR/masker-keys.json.age.new"; unset X
+   R rekey
    ```
+
+   It asks for the old passphrase once, then for the new one twice: wait for each prompt before typing. It decrypts both secrets files into its memory, makes a new identity under the new passphrase, encrypts both files to it (the keys and the SITEST values stay the same), moves the three old files into `data_dir/retired-<UTC>` with a copy of the configuration, and points the configuration at the new recipient. It prints `RETIRED`, `RECIPIENT` and `MASKER_KEYS_SHA256`: note the new recipient and digest in the "Recorder age files" record (`03` Part D step 2). If age printed an autogenerated passphrase, follow rule 3 of `03` before anything else. Then:
+   1. `R doctor` prints no `FIX`, and `R run <plan> --dry-run` opens with the new passphrase.
+   2. `R backup`, and attach the new backup to the "Recorder vault backups" record. Older backups are encrypted to the old identity: delete them from Keeper and `backup_dir`.
+   3. Replace the Keeper and escrow copies of `recorder-identity.age` and `masker-keys.json.age`.
+   4. Only then delete the `retired-<UTC>` folder and the old passphrase record.
+
+   `REKEY_FAILED` or `REKEY_IN_PROGRESS`: nothing was moved; fix the cause (for example a full disk, or a `.rekey-<UTC>` folder left from an earlier attempt, which you delete) and run `R rekey` again. `REKEY_INCOMPLETE retired-<UTC>`: the swap stopped halfway. Put the old set back, then run `R rekey` again:
 
    ```zsh
-   X=$(age -d "$DATA_DIR/backup-identity.age") && print -r -- "$X" | age -p -o "$DATA_DIR/backup-identity.age.new"; unset X
+   for f in <DATA_DIR>/retired-<UTC>/*.age; do mv -f "$f" <DATA_DIR>/; done
+   cp <DATA_DIR>/retired-<UTC>/recorder.toml ~/.config/airtimesat/recorder.toml
+   rm -r <DATA_DIR>/.rekey-<UTC> <DATA_DIR>/retired-<UTC>
    ```
-
-   Check both under the new passphrase. The first prints `true`, the second `identity OK`:
-
-   ```zsh
-   age -d "$DATA_DIR/masker-keys.json.age.new" | jq -e 'if type == "object" then keys == ["masker.inventory_key", "masker.k_mask", "masker.known_value_key", "masker.vault_key"] else error("not a JSON object") end'
-   age -d "$DATA_DIR/backup-identity.age.new" | age-keygen -y | cmp -s - "$DATA_DIR/backup-recipient.txt" && print -r -- 'identity OK'
-   ```
-
-   Only then move each `.new` file over its old name, note the new masker-keys digest (`03` Part D step 1), and make `sitest.json.age` again under the new passphrase (`rm` it, then `03` Part D step 2). Replace the Keeper and escrow copies, and only then delete the old copies and the old passphrase record.
 3. **Exposed passphrase and a copy of the files taken** (or the files leaked together with the passphrase): also follow case 3 (the SITEST secret) and case 4 (the keys and the vault).
 
 Done when only files under an unexposed passphrase exist, in `data_dir`, Keeper and escrow.
