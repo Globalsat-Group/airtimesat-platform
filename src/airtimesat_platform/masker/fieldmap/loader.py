@@ -56,6 +56,7 @@ _OVERRIDE_KEYS: Final = frozenset(
         "typed_by",
         "embedded",
         "literals",
+        "allow_nil",
         "reason",
     }
 )
@@ -184,9 +185,15 @@ def _apply_override(base: FieldEntry, item: dict[str, object], where: str) -> Fi
     if treatment is Treatment.UNCLASSIFIED:
         raise FieldMapError("FIELDMAP_BAD_TREATMENT", path=where)
     literals_raw = item.get("literals", [])
+    allow_nil = _bool(item.get("allow_nil", False), where)
+    # IWS writes a null field of its fault beans as xsi:nil, which the WSDL does not allow:
+    # an override may accept nil on an optional fault leaf only. A nil element has no value.
+    if allow_nil and (base.direction is not Direction.FAULT or base.min_occurs or base.is_complex):
+        raise FieldMapError("FIELDMAP_BAD_ALLOW_NIL", path=where)
     entry = replace(
         base,
         treatment=treatment,
+        nillable=base.nillable or allow_nil,
         id_type=None if "type" not in item else _str(item["type"], where),
         sentinel=None if "sentinel" not in item else _str(item["sentinel"], where),
         operational=_bool(item.get("operational", False), where),
