@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Purpose** | Run a reviewed recording plan's reads against SITEST and turn the masked output into a PR |
-| **When** | For each merged plan you decide to run. Writes, `inventory add` and `note` come with PR D3. Until PR W adds the generated field map, `R check` and `R run` refuse every plan with `FIELD_MAP_MISSING` |
+| **When** | For each merged plan you decide to run. Writes, `inventory add` and `note` come with PR D3 |
 | **Who** | The CTO only, on the trusted machine |
 | **Design** | [§5.1](../design/s2-recorder-masker.md#51-how-a-run-works), [§6.2](../design/s2-recorder-masker.md#62-keys-and-the-secret), [§6.3](../design/s2-recorder-masker.md#63-backup-and-recovery), [§8.4](../design/s2-recorder-masker.md#84-runtime-detector-block-and-stop) |
 | **Status** | Draft for CTO review |
 
-`R` below is `uv run --frozen python -m airtimesat_platform.recorder`, run in the checkout. `run`, `backup` and `incident clear` read `~/.config/airtimesat/recorder.toml` (`03` Part D); `--config` names another file.
+Every command runs in the session shell of [`03`](03_trusted_machine_setup.md) (`R`, `dry_secrets`, `live_secrets`, `setopt pipefail`), in the checkout. `run`, `backup` and `incident clear` read `~/.config/airtimesat/recorder.toml` (`03` Part D); `--config` names another file.
 
 ## Before
 
@@ -18,26 +18,30 @@
 
 ## The secrets, on standard input only
 
-The recorder reads one JSON object of name-to-value pairs from standard input, never from a file, an argument or an environment variable. A dry run takes the masker-keys record only (it refuses the SITEST fields); a live run takes both records:
+The recorder reads one JSON object of name-to-value pairs from standard input, never from a file, an argument or an environment variable. A dry run takes the masker-keys file only (it refuses the SITEST names); a live run takes both files (`03` Part D):
 
 - `masker.k_mask`, `masker.vault_key`, `masker.known_value_key`, `masker.inventory_key`;
-- `sitest.iws_username`, `sitest.secret_key` and, if the record has it, `sitest.sp_account_number`.
+- `sitest.iws_username`, `sitest.secret_key` and, if the file has it, `sitest.sp_account_number`.
 
-Shape of the pipe [confirm the Keeper Commander commands and the jq filter; record names are not secrets]:
+`dry_secrets` and `live_secrets` (`03` "The session shell") decrypt the files into the pipe; `age` asks for the passphrase on the terminal, once per file. Type it by hand from the Keeper record, after its prompt appears. The dry-run pipe:
 
-```sh
-keeper get "<masker keys record>" --format json \
-  | jq -c '<map the record fields to the names above>' \
-  | R run recording-plans/<plan>.yaml --dry-run
+```zsh
+dry_secrets | R run recording-plans/<plan>.yaml --dry-run
 ```
 
-For a live run, combine both records into one object in the same pipe, never through a file.
+The live-run pipe decrypts the two files one after the other and merges them into one object:
+
+```zsh
+live_secrets | R run recording-plans/<plan>.yaml
+```
+
+The recorder fetches `origin/main` while `age` asks, and reads standard input only after its checkout checks pass. A wrong passphrase prints `incorrect passphrase` from age, then a jq error in the live pipe, then `REFUSED code=SECRETS_UNREADABLE`: nothing was sent; run again.
 
 ## Run
 
 1. **Unlock Keeper** only now.
-2. **Dry run:** `... | R run recording-plans/<plan>.yaml --dry-run`. It checks the plan again, unmasks every request against the vault and prints each masked request with `DRY_RUN_CALL`. Nothing is sent. Any `REFUSED` line: stop and see below.
-3. **Live run:** the same pipe with both records and without `--dry-run`. Calls run one at a time; each prints `CALL_OK` with its outcome, duration and counts.
+2. **Dry run:** the dry-run pipe. It checks the plan again, unmasks every request against the vault and prints `RUN_START plan_id=<id> run_utc=<utc> decision=dry_run`, then per call `DRY_RUN_CALL call_id=<id> operation=<op>` and the masked request, then `DRY_RUN_DONE plan_id=<id> count=<n>`. Nothing is sent. The first dry run creates the vault. Any `REFUSED` line: stop and see below.
+3. **Live run:** the live-run pipe. It prints `RUN_START ... decision=live`, then calls run one at a time; each prints `CALL_OK` with its outcome, duration and counts. At the end, `RUN_DONE plan_id=<id> run_utc=<utc> count=<n>` and the reminder to run `recorder backup`.
 4. **Lock Keeper** as soon as the run ends.
 
 ## Read the output
@@ -49,19 +53,19 @@ For a live run, combine both records into one object in the same pipe, never thr
 ## Commit and PR
 
 1. `git switch -c recording/<plan-id>-<run-utc>`, `git add` the staging folder, commit. The pre-commit hook scans again.
-2. Push and open the PR. CI scans the range again; merge once it is green, as in design §5.1 step 6.
+2. `git push -u origin HEAD`, then `gh pr create --base main`. The PR text names no identifier and quotes no file content. CI scans the range again; merge once it is green, as in design §5.1 step 6.
 3. `git switch main`.
 
 ## Backup
 
 1. `R backup` writes `vault-<UTC>.sqlite.age` to `backup_dir`, encrypted to the configured age recipient, and deletes backups there older than 30 days. It refuses with `VAULT_MISSING` if `data_dir` holds no vault: check the configuration.
-2. Attach the new file to the Keeper backup record by hand, and delete the record's attachments older than 30 days (design §6.4) [confirm the Keeper steps]. Then lock Keeper.
+2. Attach the new file to the "Recorder vault backups" record by hand in the Keeper app, and delete the record's attachments older than 30 days (design §6.4). Then clear the clipboard (`pbcopy < /dev/null`) and lock Keeper.
 
 ## When the run stops
 
-- **`REFUSED code=<CODE> [path=...]` before any call** (`CHECKOUT_NOT_CLEAN`, `HEAD_NOT_ON_MAIN`, `CODE_NOT_FROM_CHECKOUT` when `R` runs from another clone, `PLAN_NOT_IN_PLANS_FOLDER`, an expired plan, `IDENTIFIER_NOT_ISSUED`, `INCIDENT_OPEN`, `COOLDOWN_PENDING`, a missing secret, `QUEUE_ENTRY_NOT_SUPPORTED` until PR W): nothing was sent. Fix the cause; for `COOLDOWN_PENDING` wait 60 s after the last timeout or interrupted call.
+- **`REFUSED code=<CODE> [path=...]` before any call** (`CHECKOUT_NOT_CLEAN`, `HEAD_NOT_ON_MAIN`, `CODE_NOT_FROM_CHECKOUT` when `R` runs from another clone, `PLAN_NOT_IN_PLANS_FOLDER`, an expired plan, `IDENTIFIER_NOT_ISSUED`, `INCIDENT_OPEN`, `COOLDOWN_PENDING`, a missing secret, `SECRETS_UNREADABLE` after a wrong passphrase, `QUEUE_ENTRY_NOT_SUPPORTED` until the recorder records the queue entry ids of its own writes): nothing was sent. Fix the cause; for `COOLDOWN_PENDING` wait 60 s after the last timeout or interrupted call.
 - **`CALL_BLOCKED`** (`MASKING_BLOCKED`, an unknown or unclassified element, or another field-map mismatch): nothing was written for that call and the method stays refused. Follow [`06`](06_incidents.md) case 1; once the fix is merged, `R incident clear <id>` prints the method it re-enables.
-- **`CALL_FAILED`** (a refusal, a timeout, a gateway error, a transient masking failure: `NON_SOAP_BODY`, `XML_PARSE`, `XML_TOO_LARGE`, `MASKING_TIMEOUT`, `MASKING_FAILED`, `TOO_MANY_ROWS`; or a vault or key failure: `VAULT_WRITE_FAILED`, `VAULT_INTEGRITY`, `COLLISION_LIMIT`, `SURROGATE_SPACE_EXHAUSTED`): nothing was written for that call and no method is refused. Calls already written stay staged and scanned; commit them or delete the folder. Fix the cause and run again: wait out an outage; for `TOO_MANY_ROWS` (IWS returned more rows than the request asked for), give the agents the call id; for `VAULT_INTEGRITY`, check the jq mapping of the masker-keys record first (a wrong or swapped key), and if the keys are right, stop and tell the design owner, as for `COLLISION_LIMIT` and `SURROGATE_SPACE_EXHAUSTED`.
+- **`CALL_FAILED`** (a refusal, a timeout, a gateway error, a transient masking failure: `NON_SOAP_BODY`, `XML_PARSE`, `XML_TOO_LARGE`, `MASKING_TIMEOUT`, `MASKING_FAILED`, `TOO_MANY_ROWS`; or a vault or key failure: `VAULT_WRITE_FAILED`, `VAULT_INTEGRITY`, `COLLISION_LIMIT`, `SURROGATE_SPACE_EXHAUSTED`): nothing was written for that call and no method is refused. Calls already written stay staged and scanned; commit them or delete the folder. Fix the cause and run again: wait out an outage; for `TOO_MANY_ROWS` (IWS returned more rows than the request asked for), give the agents the call id; for `VAULT_INTEGRITY`, check first that `shasum -a 256 "$DATA_DIR/masker-keys.json.age"` matches the digest noted in `03` Part D step 1 (never delete the file here), and if it matches, stop and tell the design owner, as for `COLLISION_LIMIT` and `SURROGATE_SPACE_EXHAUSTED`.
 - **`RUN_FAILED code=STAGING_SCAN_HIT`:** the scans found something and the staging folder is deleted. Each `SCAN_FINDING` line before it names the file, the line and the check (`leak_scan:<detector>`, `gitleaks:<rule>`, or `secret:<name>` for the SITEST secret or a key), never the value. The incident refuses every run until you clear it. Treat it as [`06`](06_incidents.md) case 1, give the agents the `SCAN_FINDING` lines, and treat it as case 3 too if the check is `secret:` or `gitleaks:`. A `STAGING_DELETE_FAILED` line means part of the folder remains: delete it by hand before anything else.
 - **`RUN_FAILED code=SCANNER_UNAVAILABLE`:** a scanner could not run (gitleaks missing from `PATH`, a crash, a timeout) and found nothing; the staging folder is deleted and no run is refused. Fix the tool (runbook [`03`](03_trusted_machine_setup.md)) and run again.
 - **`RUN_FAILED code=RUN_INTERRUPTED`** (Ctrl-C, a closed terminal or a shutdown, or an uncaught error that also prints `UNCAUGHT <type>`): the staging folder is deleted unscanned. If a call was in flight, the 60 s cooldown holds. Give the agents the error type if it repeats, then run again. If the recorder was killed outright (power loss, `kill -9`), a staging folder without `manifest.json` may remain: delete it unscanned, never commit it.

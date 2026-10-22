@@ -19,7 +19,7 @@ Plans and decisions live in `Globalsat-Group/IWS`. This repository holds code, t
 
 - Never call IWS production or Beta (Beta is CTO-only, like production; confirmed by the CTO on 20 Oct 2026). Agents never call SITEST. In S2 the only SITEST client is the recorder, which the CTO runs on the trusted machine from a reviewed recording plan. Agents ask for live data by writing a recording plan in a PR. Every production call and every call to Iridium's SFTP is made by the CTO.
 - The development credential covers both SITEST and Beta. The recorder, and any later agent-facing tool, call the SITEST endpoint only; a Beta endpoint in agent-reachable code or config is a defect.
-- Never hold, request, print or store a raw credential. Only gateway code reads an IWS secret. In S2 the SITEST secret is read by the gateway signer core inside the recorder, from the CTO's Keeper, for a live run only. From S4 the production gateway reads IWS secrets from Secrets Manager.
+- Never hold, request, print or store a raw credential. Only gateway code reads an IWS secret. In S2 the SITEST secret is read by the gateway signer core inside the recorder, from an age-encrypted file on the CTO's trusted machine (its passphrase in the CTO's Keeper), for a live run only. From S4 the production gateway reads IWS secrets from Secrets Manager.
 - SITEST is refreshed from production, so it is production personal data.
 - Recording plans may read within the recorder's allowlist. Writes go only to assigned test inventory, inside a recording plan the CTO approved and runs.
 - DEACTIVE stays with the CTO. Never run it, script it or put it in a test plan or a recording plan.

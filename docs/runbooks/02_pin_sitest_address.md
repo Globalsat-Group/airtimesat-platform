@@ -8,9 +8,7 @@
 | **Design** | [§7.1](../design/s2-recorder-masker.md#71-signer-core-and-beta-unreachability) item 2 |
 | **Status** | Draft for CTO review |
 
-The transport never asks DNS for SITEST: it connects only to an address in [`gateway/endpoints_sitest.py`](../../src/airtimesat_platform/gateway/endpoints_sitest.py) and checks the certificate for the SITEST name. While the tuple is empty, every send is refused.
-
-**Before the first pin:** ask the agents for a reviewed PR that fixes two tests that assume an empty tuple. Once an address is pinned, `test_without_a_pinned_address_nothing_is_sent` ([`tests/gateway/test_sitest_port.py`](../../tests/gateway/test_sitest_port.py)) would send a request to SITEST from CI and from every agent session, which breaks "agents never call SITEST". It must set the tuple to `()` with `monkeypatch`. `test_the_pinned_address_is_empty_until_the_cto_pins_it` ([`tests/gateway/test_sitest_transport.py`](../../tests/gateway/test_sitest_transport.py)) must be replaced, for example by a check that each pinned value is an IP address. Merge that PR first.
+The transport never asks DNS for SITEST: it connects only to an address in [`gateway/endpoints_sitest.py`](../../src/airtimesat_platform/gateway/endpoints_sitest.py) and checks the certificate for the SITEST name. An empty tuple refuses every send. The address was pinned in PR #14, after PR #11 made the tests independent of the pinned value ([`tests/gateway/test_sitest_port.py`](../../tests/gateway/test_sitest_port.py) sets the tuple to `()` with `monkeypatch`, so no test sends to SITEST). Use the steps below to re-pin.
 
 ## Steps
 
