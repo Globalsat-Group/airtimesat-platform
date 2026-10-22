@@ -5,6 +5,7 @@ network guard lets tests open loopback connections only, so no test can reach SI
 other host, whatever the pinned address holds (CLAUDE.md: agents never call SITEST).
 """
 
+import copy
 import io
 import ipaddress
 import json
@@ -16,11 +17,14 @@ import subprocess
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
+from functools import cache
 from pathlib import Path
 from typing import Any, cast
 
 import pytest
+from lxml import etree
 
+import generate_fieldmap as gen
 from airtimesat_platform.common.secrets import SecretValue
 from airtimesat_platform.common.secrets_stdin import StdinSecretsProvider
 from airtimesat_platform.gateway.sitest_port import (
@@ -201,6 +205,42 @@ def map_texts_fixture() -> tuple[str, str]:
 def keys_factory_fixture() -> Callable[[int], MaskingKeys]:
     """Return the fake key factory."""
     return fake_keys
+
+
+# ---------------------------------------------------------------- the real WSDL schema
+#
+# Shared by tests/test_generate_fieldmap.py (PR W) and tests/masker/test_mask_first_plan.py,
+# which build schema-valid responses from the CTO's snapshot. Test modules cannot import
+# conftest, so the builder is a fixture.
+
+WSDL_XS = "http://www.w3.org/2001/XMLSchema"
+WsdlSchema = tuple[gen.Schema, dict[str, gen.Operation], etree.XMLSchema]
+
+
+@cache
+def _wsdl_schema(endpoint: str) -> WsdlSchema:
+    """Return the snapshot's schema, operations and a validator with response wrappers.
+
+    Each operation gets a global ``<op>Response`` element holding its response part, so a
+    response body element validates on its own.
+    """
+    wsdl = etree.fromstring(gen.snapshot()[0][endpoint], etree.XMLParser(resolve_entities=False))
+    schema, operations = gen.read_schema(wsdl), gen.read_operations(wsdl)
+    xs = copy.deepcopy(wsdl.find(f"{gen.WSDL}types/{gen.XS}schema"))
+    assert xs is not None
+    for name, op in operations.items():
+        wrapper = etree.SubElement(xs, f"{{{WSDL_XS}}}element", name=f"{name}Response")
+        seq = etree.SubElement(
+            etree.SubElement(wrapper, f"{{{WSDL_XS}}}complexType"), f"{{{WSDL_XS}}}sequence"
+        )
+        etree.SubElement(seq, f"{{{WSDL_XS}}}element", name="response", type=f"tns:{op.response}")
+    return schema, operations, etree.XMLSchema(etree.ElementTree(xs))
+
+
+@pytest.fixture(name="wsdl_schema", scope="session")
+def wsdl_schema_fixture() -> Callable[[str], WsdlSchema]:
+    """Return the cached builder of the snapshot's schema, by endpoint."""
+    return _wsdl_schema
 
 
 # ---------------------------------------------------------------- recorder run harness

@@ -1,7 +1,7 @@
 """Tests for scripts/generate_fieldmap.py: synthetic WSDL, drift, coverage and engine paths."""
 
 import copy
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from functools import cache
 
 import pytest
@@ -185,19 +185,9 @@ def test_keep_is_proposed_exactly_where_propose_says() -> None:
 # override file that keeps every path of the operation: no UNCLASSIFIED, no unknown element.
 
 
-@cache
-def _schema(endpoint: str) -> tuple[gen.Schema, dict[str, gen.Operation], etree.XMLSchema]:
-    wsdl = etree.fromstring(gen.snapshot()[0][endpoint], etree.XMLParser(resolve_entities=False))
-    schema, operations = gen.read_schema(wsdl), gen.read_operations(wsdl)
-    xs = copy.deepcopy(wsdl.find(f"{gen.WSDL}types/{gen.XS}schema"))
-    assert xs is not None
-    for name, op in operations.items():
-        wrapper = etree.SubElement(xs, f"{{{XS}}}element", name=f"{name}Response")
-        seq = etree.SubElement(
-            etree.SubElement(wrapper, f"{{{XS}}}complexType"), f"{{{XS}}}sequence"
-        )
-        etree.SubElement(seq, f"{{{XS}}}element", name="response", type=f"tns:{op.response}")
-    return schema, operations, etree.XMLSchema(etree.ElementTree(xs))
+# The snapshot's schema, operations and validator come from the ``wsdl_schema`` fixture
+# (tests/conftest.py), shared with tests/masker/test_mask_first_plan.py.
+WsdlSchema = Callable[[str], tuple[gen.Schema, dict[str, gen.Operation], etree.XMLSchema]]
 
 
 def _leaf_value(schema: gen.Schema, decl: Element) -> str:
@@ -232,8 +222,10 @@ def _fill(
         _fill(schema, child, target, child_path, include)
 
 
-def _response(endpoint: str, operation: str, include: dict[str, str]) -> Element:
-    schema, operations, xsd = _schema(endpoint)
+def _response(
+    wsdl_schema: WsdlSchema, endpoint: str, operation: str, include: dict[str, str]
+) -> Element:
+    schema, operations, xsd = wsdl_schema(endpoint)
     body = etree.Element(f"{{{IWS}}}{operation}Response", nsmap={"tns": IWS, "xsi": XSI})
     response = etree.SubElement(body, "response")
     response_type = operations[operation].response
@@ -288,9 +280,14 @@ def kept_map() -> FieldMap:
 
 @pytest.mark.parametrize(("endpoint", "operation", "include"), CASES)
 def test_engine_paths_match_the_generated_map(
-    kept_map: FieldMap, vault: Vault, endpoint: str, operation: str, include: dict[str, str]
+    kept_map: FieldMap,
+    vault: Vault,
+    wsdl_schema: WsdlSchema,
+    endpoint: str,
+    operation: str,
+    include: dict[str, str],
 ) -> None:
-    data = _envelope(_response(endpoint, operation, include))
+    data = _envelope(_response(wsdl_schema, endpoint, operation, include))
     for sub in filter(None, include.values()):
         assert f'xsi:type="tns:{sub}"'.encode() in data
     engine = MaskingEngine(kept_map, vault)
