@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Purpose** | Harvest both SITEST WSDLs, record SITEST's address and certificate, look up Beta by DNS only, check Python's TLS trust, and commit the WSDL snapshot |
-| **When** | The first live step of S2 (design §10.2 step 1), after `03` Part A |
+| **When** | Done on 21 Oct 2026 (design §10.2 step 1). Now the re-record procedure: when SITEST moves (`02`) or Python's interpreter changes (step 6), after `03` Part A |
 | **Who** | The CTO only, on the trusted machine |
 | **Design** | [§7.1](../design/s2-recorder-masker.md#71-signer-core-and-beta-unreachability), [§6.5](../design/s2-recorder-masker.md#65-the-trusted-machine) "Manual calls", [§13](../design/s2-recorder-masker.md#13-decisions-and-open-items) #9, #23, #24 |
 | **Status** | Draft for CTO review |
@@ -14,7 +14,7 @@ From [`gateway/endpoints_sitest.py`](../../src/airtimesat_platform/gateway/endpo
 H=iwstraining.iridium.com; P=8443
 ```
 
-**Before step 8:** ask the agents for a reviewed change to [`tests/gateway/test_sitest_no_beta_host.py`](../../tests/gateway/test_sitest_no_beta_host.py). Today it allows the SITEST host only in `endpoints_sitest.py`, so a WSDL snapshot that names it fails `make check`. The change should allow the SITEST host and the IWS namespace URI under `gateway/wsdl/sitest/` only, and still fail every other Iridium host [confirm the scope in that PR's review]. It loosens a Beta control, so review it line by line.
+**Step 8 and the no-Beta test:** [`tests/gateway/test_sitest_no_beta_host.py`](../../tests/gateway/test_sitest_no_beta_host.py) allows the SITEST host under `gateway/wsdl/sitest/` and in `endpoints_sitest.py` only, and fails every other Iridium host (PR #11).
 
 ## SoapUI calls
 
@@ -115,9 +115,7 @@ Done when the record is merged.
 
 ### 8. Commit the WSDL snapshot
 
-Once the test change above is merged:
-
-1. Copy the files, unchanged, to `src/airtimesat_platform/gateway/wsdl/sitest/` (both WSDLs, the XSDs, `SHA256SUMS`) on a branch from your checked `main` [confirm the names with PR W].
+1. Copy the files, unchanged, to `src/airtimesat_platform/gateway/wsdl/sitest/` on a branch from your checked `main`, under the names already there (`provisioning.wsdl`, `reporting.wsdl`, `SHA256SUMS`; merged in PR #13).
 2. Scan them: `uv run --locked python scripts/leak_scan.py src/airtimesat_platform/gateway/wsdl/sitest/*` and `gitleaks dir src/airtimesat_platform/gateway/wsdl/sitest --redact --no-banner`. A hit: stop. Never edit the WSDL bytes to pass.
 3. Commit, push, open the PR. Its text quotes no file content. Review it line by line (it is under `gateway/`) and merge it.
 4. Delete the raw harvest from the manual-call folder.
