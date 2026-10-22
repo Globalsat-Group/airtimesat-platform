@@ -35,6 +35,7 @@ from airtimesat_platform.masker.fieldmap.model import FieldMap
 from airtimesat_platform.masker.freetext import Template
 from airtimesat_platform.masker.keys import MaskingKeys
 from airtimesat_platform.masker.tokenize.vault import InMemoryVaultStore, Vault
+from airtimesat_platform.recorder import plan as plan_module
 from airtimesat_platform.recorder.config import Config
 from airtimesat_platform.recorder.run import run_plan
 from airtimesat_platform.recorder.store import DB_NAME, open_store
@@ -93,6 +94,22 @@ def _no_network(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(socket.socket, "connect", guarded_connect)
     monkeypatch.setattr(socket.socket, "connect_ex", guarded_connect_ex)
     monkeypatch.setattr(socket, "getaddrinfo", guarded_getaddrinfo)
+
+
+@pytest.fixture(autouse=True)
+def _synthetic_schema(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Pass the WSDL schema check, except in modules that set ``REAL_WSDL_SCHEMA = True``.
+
+    Most plans in the tests are written against the synthetic field maps, whose structure is
+    invented, so the real snapshot's schema would refuse them before the check under test.
+    The schema check itself is tested against the snapshot (``REAL_WSDL_SCHEMA`` modules).
+    """
+    if not getattr(getattr(request, "module", None), "REAL_WSDL_SCHEMA", False):
+
+        def passes(*_: object, **__: object) -> None:
+            return None
+
+        monkeypatch.setattr(plan_module, "validate_request", passes)
 
 
 def fake_keys(seed: int = 1) -> MaskingKeys:

@@ -26,13 +26,14 @@ PROVISIONING: Final = "provisioning"
 REPORTING: Final = "reporting"
 ENDPOINTS: Final = (PROVISIONING, REPORTING)
 
-# TODO(W): confirm every name below against the WSDL snapshot. They are the WSDL names
-# where Annex D §2.2 gives them (getSubscriberOrgs, getEVoucherInventory) and catalog names
-# otherwise.
-_SYSTEM_BOTH: Final = frozenset({"getSystemStatus", "getProjectVersion"})
+# WSDL operation names, checked against the snapshot per endpoint (tests/recorder/
+# test_recorder_wsdl.py). The catalog's getProjectVersion is getIwsVersion on the
+# provisioning endpoint and getIwsReportVersion on the reporting one.
+_SYSTEM_BOTH: Final = frozenset({"getSystemStatus"})
 READS_PROVISIONING: Final = _SYSTEM_BOTH | frozenset(
     {
         # System
+        "getIwsVersion",
         "authenticatedPing",
         "findServiceProviderProfile",
         "getDemoAndTrialCounts",
@@ -61,7 +62,7 @@ READS_PROVISIONING: Final = _SYSTEM_BOTH | frozenset(
         "getFlagStates",
         "getPrepaidPlans",
         "getVoucherDenominations",
-        "getEVoucherInventory",
+        "getEvoucherInventory",
         "getSecondaryDataServices",
         "getBurstDeviceBundles",
         "getBurstServiceBundles",
@@ -78,7 +79,7 @@ READS_PROVISIONING: Final = _SYSTEM_BOTH | frozenset(
         "searchSimLock",
         "getRechargeHistory",
         "getPrepaidAccountDetail",
-        "getSubscriberOrgs",
+        "getSubscriberOrganizations",
         "getSubscriberOrgDetail",
         "getVessels",
         "getVessel",
@@ -92,6 +93,7 @@ READS_PROVISIONING: Final = _SYSTEM_BOTH | frozenset(
 )
 READS_REPORTING: Final = _SYSTEM_BOTH | frozenset(
     {
+        "getIwsReportVersion",
         "getReportTypes",
         "getReportCategory",
         "getReportColumns",
@@ -105,8 +107,7 @@ READS: Final[dict[str, frozenset[str]]] = {
     PROVISIONING: READS_PROVISIONING,
     REPORTING: READS_REPORTING,
 }
-# TODO(W): confirm against the WSDL snapshot. Refused in D1; allowed with a writes section
-# in D3 (design §5.3, §5.6).
+# Refused in D1; allowed with a writes section in D3 (design §5.3, §5.6).
 WRITES: Final = frozenset(
     {
         "activateSubscriber",
@@ -172,12 +173,18 @@ class MethodRules:
     no_wildcards: tuple[str, ...] = ()
 
 
-# TODO(W): confirm every element name, and the timestamp format of the window, against the
-# WSDL snapshot. The names follow the catalog. getQueueEntries has no window or limit in
-# the catalog (design §13 #31, open); if the WSDL has them, they get the IWS log's rules.
+# Element names as the WSDL snapshot declares them. The WSDL types the IWS log window as
+# xs:string; the catalog says ISO 8601, and the recorder accepts only its UTC form below.
+# getQueueEntries has no window or limit in the WSDL either: only endpoint, status and
+# createdBy (design §13 #31). startRow, the paging input, is capped wherever the WSDL has it
+# (design §5.3). Its range is not required: a missing startRow reads from row 0, not "all
+# rows", and the WSDL schema check refuses a plan that leaves out a required one (accountSearch,
+# getRechargeHistory, getEvoucherInventory). Every getVessels input is required by the WSDL, so
+# no getVessels plan passes yet (design §13 #32).
+_START_ROW: Final = Range("startRow", 0, 200, required=False)
 LIMITS: Final[dict[str, MethodRules]] = {
     "accountSearch": MethodRules(
-        ranges=(Range("limit", 1, 50), Range("startRow", 0, 200, required=False)),
+        ranges=(Range("limit", 1, 50), _START_ROW),
         enums=(
             EnumRule("filterType", "FILTER_SMART_REFUSED", refused=frozenset({"SMART"})),
             EnumRule("filterCond", "FILTER_COND_REFUSED", allowed=frozenset({"EQUALS"})),
@@ -185,23 +192,25 @@ LIMITS: Final[dict[str, MethodRules]] = {
         required=("filterType", "filterValue"),
     ),
     "getDevices": MethodRules(ranges=(Range("numResults", 1, 20),)),
-    "getRechargeHistory": MethodRules(ranges=(Range("limit", 1, 50),)),
-    "getEVoucherInventory": MethodRules(ranges=(Range("limit", 1, 50),)),
-    "getSubscriberOrgs": MethodRules(required=("Id",), only=frozenset({"Id"})),
+    "getRechargeHistory": MethodRules(ranges=(Range("limit", 1, 50), _START_ROW)),
+    "getEvoucherInventory": MethodRules(ranges=(Range("limit", 1, 50), _START_ROW)),
+    # Report metadata, no subscriber data; paged like the others so the reply has a row limit.
+    "getReportTypes": MethodRules(ranges=(Range("limit", 1, 100), _START_ROW)),
+    "getSubscriberOrganizations": MethodRules(required=("id",), only=frozenset({"id"})),
     "getVessels": MethodRules(
         one_of=("id", "imo", "mmsi", "vesselName"),
         only=frozenset({"id", "imo", "mmsi", "vesselName"}),
         shapes=(("vesselName", "VESSEL"),),
     ),
-    # One request, matched exactly: Wildcard absent or FALSE, no wildcard character.
+    # One request, matched exactly: wildcard (required by the WSDL) FALSE, no wildcard character.
     "bulkActionSearch": MethodRules(
-        enums=(EnumRule("Wildcard", "WILDCARD_REFUSED", allowed=frozenset({"FALSE"})),),
+        enums=(EnumRule("wildcard", "WILDCARD_REFUSED", allowed=frozenset({"FALSE"})),),
         required=("bulkRequestId",),
-        only=frozenset({"bulkRequestId", "Wildcard"}),
+        only=frozenset({"bulkRequestId", "wildcard"}),
         no_wildcards=("bulkRequestId",),
     ),
     "getIwsRequests": MethodRules(
-        ranges=(Range("Limit", 1, 100),),
+        ranges=(Range("limit", 1, 100), _START_ROW),
         window=Window("startDate", "endDate", max_hours=24),
     ),
     "getQueueEntries": MethodRules(set_by_recorder=("createdBy",)),

@@ -57,8 +57,8 @@ BULK: Final = "ALWAYS_REFUSED_BULK"
 METHOD: Final = "ALWAYS_REFUSED_METHOD"
 SP_WIDE: Final = "ALWAYS_REFUSED_SP_WIDE"
 
-# TODO(W): confirm every name below against the WSDL snapshot. Where the catalog and the
-# WSDL may spell a name differently, both spellings are listed; matching ignores case.
+# WSDL operation names, matched ignoring case. Every name exists in the snapshot except the
+# two catalog spellings marked below (tests/recorder/test_recorder_wsdl.py).
 _SP_WIDE_WRITES: Final = frozenset(
     {
         "manageDestinations",
@@ -67,13 +67,21 @@ _SP_WIDE_WRITES: Final = frozenset(
         "updateEmailNotification",
     }
 )
-_BULK_METHODS: Final = frozenset({"bulkAccountUpdate", "bulkAddPrepaid", "bulkDeletePrepaid"})
+_BULK_METHODS: Final = frozenset(
+    {
+        "bulkAccountUpdate",
+        "bulkAddPrepaid",
+        "bulkDeletePrepaid",
+        # WSDL only (not in the catalog)
+        "bulkProvisioning",
+        "bulkRechargePrepaidAccount",
+    }
+)
 _OTHER_REFUSED: Final = frozenset(
     {
         # Destructive or inventory-moving
         "deletePrepaidAccount",
         "deactivateTelephonyScratchCard",
-        "deactivateTelephonyScratchcard",
         "unquarantineDevice",
         "deviceTransferOwner",
         "loadIMEI",
@@ -104,7 +112,7 @@ _OTHER_REFUSED: Final = frozenset(
         "activateTelephonyScratchCards",
         "updateScratchCardStatus",
         "refundPrepaidVoucher",
-        "getScratchcards",
+        "getScratchCards",
         "getScratchCardBatches",
         "getScratchcardDeals",
         "getScratchcardOrders",
@@ -112,6 +120,8 @@ _OTHER_REFUSED: Final = frozenset(
         "searchVoucherOrder",
         "getPrepaidAccountSummary",
         "searchDeviceUsage",
+        # WSDL only (not in the catalog)
+        "queryScratchCards",
         # Reports delivered outside the recorder or returning bulk rows
         "createScheduledReport",
         "updateScheduledReport",
@@ -150,12 +160,16 @@ _OTHER_REFUSED: Final = frozenset(
         "updateTopicAssociation",
         "updateQueueEntry",
         "createVessel",
+        "updateVessel",
+        # Not in the WSDL (a catalog spelling); kept so that no spelling of it ever passes.
         "updateVessels",
         "createSecondaryDataService",
         "updateSecondaryDataService",
         "deleteSecondaryDataService",
         "createSubscriberOrganization",
         "updateSubscriberOrganization",
+        "updateSubscriberOrgStatus",
+        # Not in the WSDL (a catalog short name); kept for the same reason.
         "updateSubscriberOrg",
         "updatePTTSubOrgStatus",
         "getAccountPoolingGroups",

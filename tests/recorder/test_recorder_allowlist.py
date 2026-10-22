@@ -54,7 +54,7 @@ def test_no_read_is_also_a_write() -> None:
     [
         ("getSystemStatus", "<request/>", "provisioning"),
         ("getSystemStatus", "<request/>", "reporting"),
-        ("getReportTypes", "<request/>", "reporting"),
+        ("getReportTypes", "<request><limit>10</limit></request>", "reporting"),
         (
             "getDevices",
             "<request><serviceType>SBD</serviceType><deviceType>IMEI</deviceType>"
@@ -63,7 +63,7 @@ def test_no_read_is_also_a_write() -> None:
         ),
         ("getVessels", "<request><imo>{IMO}</imo></request>", "provisioning"),
         ("getVessels", "<request><vesselName>{VESSEL}</vesselName></request>", "provisioning"),
-        ("getSubscriberOrgs", "<request><Id>{ORG}</Id></request>", "provisioning"),
+        ("getSubscriberOrganizations", "<request><id>{ORG}</id></request>", "provisioning"),
         (
             "bulkActionSearch",
             "<request><bulkRequestId>4711</bulkRequestId></request>",
@@ -75,7 +75,7 @@ def test_no_read_is_also_a_write() -> None:
             "provisioning",
         ),
         (
-            "getEVoucherInventory",
+            "getEvoucherInventory",
             "<request><limit>1</limit><startRow>0</startRow></request>",
             "provisioning",
         ),
@@ -83,7 +83,7 @@ def test_no_read_is_also_a_write() -> None:
             "getIwsRequests",
             "<request><iwsOperation>accountSearch</iwsOperation>"
             "<startDate>2026-10-20T00:00:00Z</startDate><endDate>2026-10-21T00:00:00Z</endDate>"
-            "<Limit>100</Limit></request>",
+            "<limit>100</limit></request>",
             "provisioning",
         ),
         (
@@ -205,13 +205,16 @@ def test_vessels_are_searched_by_their_identifiers_only(
 def test_organizations_are_searched_by_id_only(
     refuse: Refuse, build: Build, make_call: MakeCall, surrogate: Surrogate
 ) -> None:
-    by_name = f"<request><Name>{surrogate('ORG')}</Name></request>"
+    by_name = f"<request><name>{surrogate('ORG')}</name></request>"
     assert (
-        refuse(build([make_call("o", "getSubscriberOrgs", by_name)])).code
+        refuse(build([make_call("o", "getSubscriberOrganizations", by_name)])).code
         == "SEARCH_INPUT_REQUIRED"
     )
-    both = f"<request><Id>{surrogate('ORG')}</Id><Name>{surrogate('ORG', 1)}</Name></request>"
-    assert refuse(build([make_call("o", "getSubscriberOrgs", both)])).code == "SEARCH_INPUT_REFUSED"
+    both = f"<request><id>{surrogate('ORG')}</id><name>{surrogate('ORG', 1)}</name></request>"
+    assert (
+        refuse(build([make_call("o", "getSubscriberOrganizations", both)])).code
+        == "SEARCH_INPUT_REFUSED"
+    )
 
 
 @pytest.mark.parametrize("value", ["", "user-abcdefgh", "rec.RP-2026-003"])
@@ -230,21 +233,21 @@ def test_queue_entries_created_by_is_set_by_the_recorder(
     ("request_xml", "code", "location"),
     [
         (
-            "<request><bulkRequestId>4711</bulkRequestId><Wildcard>*</Wildcard></request>",
+            "<request><bulkRequestId>4711</bulkRequestId><wildcard>*</wildcard></request>",
             "WILDCARD_REFUSED",
-            "calls[0]/request/Wildcard",
+            "calls[0]/request/wildcard",
         ),
         (
-            "<request><bulkRequestId>4711</bulkRequestId><Wildcard>TRUE</Wildcard></request>",
+            "<request><bulkRequestId>4711</bulkRequestId><wildcard>TRUE</wildcard></request>",
             "WILDCARD_REFUSED",
-            "calls[0]/request/Wildcard",
+            "calls[0]/request/wildcard",
         ),
         # Only the exact literal FALSE: the plan's text is sent as written.
         *(
             (
-                f"<request><bulkRequestId>4711</bulkRequestId><Wildcard>{value}</Wildcard></request>",
+                f"<request><bulkRequestId>4711</bulkRequestId><wildcard>{value}</wildcard></request>",
                 "WILDCARD_REFUSED",
-                "calls[0]/request/Wildcard",
+                "calls[0]/request/wildcard",
             )
             for value in ("false", "False", " FALSE ", "\uff26\uff21\uff2c\uff33\uff25")
         ),
@@ -254,7 +257,7 @@ def test_queue_entries_created_by_is_set_by_the_recorder(
             "calls[0]/request/bulkRequestId",
         ),
         (
-            "<request><bulkRequestId>47%</bulkRequestId><Wildcard>FALSE</Wildcard></request>",
+            "<request><bulkRequestId>47%</bulkRequestId><wildcard>FALSE</wildcard></request>",
             "WILDCARD_REFUSED",
             "calls[0]/request/bulkRequestId",
         ),
@@ -272,7 +275,7 @@ def test_bulk_action_search_matches_one_request_exactly(
     assert (error.code, error.location) == (code, location)
 
 
-@pytest.mark.parametrize("wildcard", ["", "<Wildcard>FALSE</Wildcard>"])
+@pytest.mark.parametrize("wildcard", ["", "<wildcard>FALSE</wildcard>"])
 def test_bulk_action_search_exact_match_passes(
     check: Check, build: Build, make_call: MakeCall, wildcard: str
 ) -> None:
@@ -314,31 +317,31 @@ def test_bulk_action_search_by_request_id_only(
             "calls[0]/request/numResults",
         ),
         (
-            "getEVoucherInventory",
+            "getEvoucherInventory",
             "<request><limit>0</limit></request>",
             "LIMIT_OUT_OF_RANGE",
             "calls[0]/request/limit",
         ),
         (
-            "getEVoucherInventory",
+            "getEvoucherInventory",
             "<request><limit>51</limit></request>",
             "LIMIT_OUT_OF_RANGE",
             "calls[0]/request/limit",
         ),
         (
-            "getEVoucherInventory",
+            "getEvoucherInventory",
             "<request><limit>-1</limit></request>",
             "LIMIT_NOT_AN_INTEGER",
             "calls[0]/request/limit",
         ),
         (
-            "getEVoucherInventory",
+            "getEvoucherInventory",
             "<request><limit>05</limit></request>",
             "LIMIT_NOT_AN_INTEGER",
             "calls[0]/request/limit",
         ),
         (
-            "getEVoucherInventory",
+            "getEvoucherInventory",
             "<request><limit>1e3</limit></request>",
             "LIMIT_NOT_AN_INTEGER",
             "calls[0]/request/limit",
@@ -349,66 +352,92 @@ def test_bulk_action_search_by_request_id_only(
             "LIMIT_MISSING",
             "calls[0]/request/limit",
         ),
+        # startRow is capped wherever the WSDL has it (design §5.3).
         (
-            "getSubscriberOrgs",
-            "<request><Id></Id></request>",
-            "SEARCH_INPUT_REQUIRED",
-            "calls[0]/request/Id",
+            "getEvoucherInventory",
+            "<request><limit>5</limit><startRow>999999</startRow></request>",
+            "LIMIT_OUT_OF_RANGE",
+            "calls[0]/request/startRow",
         ),
         (
-            "getSubscriberOrgs",
-            "<request><Id>  </Id></request>",
-            "SEARCH_INPUT_REQUIRED",
-            "calls[0]/request/Id",
+            "getRechargeHistory",
+            "<request><msisdn>x</msisdn><limit>5</limit><startRow>201</startRow></request>",
+            "LIMIT_OUT_OF_RANGE",
+            "calls[0]/request/startRow",
         ),
-        ("getSubscriberOrgs", "<request/>", "SEARCH_INPUT_REQUIRED", "calls[0]/request/Id"),
         (
             "getIwsRequests",
             "<request><iwsOperation>x</iwsOperation><startDate>2026-10-20T00:00:00Z</startDate>"
-            "<endDate>2026-10-21T00:00:01Z</endDate><Limit>10</Limit></request>",
+            "<endDate>2026-10-21T00:00:00Z</endDate><limit>10</limit><startRow>201</startRow>"
+            "</request>",
+            "LIMIT_OUT_OF_RANGE",
+            "calls[0]/request/startRow",
+        ),
+        (
+            "getSubscriberOrganizations",
+            "<request><id></id></request>",
+            "SEARCH_INPUT_REQUIRED",
+            "calls[0]/request/id",
+        ),
+        (
+            "getSubscriberOrganizations",
+            "<request><id>  </id></request>",
+            "SEARCH_INPUT_REQUIRED",
+            "calls[0]/request/id",
+        ),
+        (
+            "getSubscriberOrganizations",
+            "<request/>",
+            "SEARCH_INPUT_REQUIRED",
+            "calls[0]/request/id",
+        ),
+        (
+            "getIwsRequests",
+            "<request><iwsOperation>x</iwsOperation><startDate>2026-10-20T00:00:00Z</startDate>"
+            "<endDate>2026-10-21T00:00:01Z</endDate><limit>10</limit></request>",
             "WINDOW_TOO_LONG",
             "calls[0]/request/endDate",
         ),
         (
             "getIwsRequests",
             "<request><iwsOperation>x</iwsOperation><startDate>2026-10-21T00:00:00Z</startDate>"
-            "<endDate>2026-10-20T00:00:00Z</endDate><Limit>10</Limit></request>",
+            "<endDate>2026-10-20T00:00:00Z</endDate><limit>10</limit></request>",
             "WINDOW_INVALID",
             "calls[0]/request/endDate",
         ),
         (
             "getIwsRequests",
             "<request><iwsOperation>x</iwsOperation><startDate>2026-10-20</startDate>"
-            "<endDate>2026-10-21T00:00:00Z</endDate><Limit>10</Limit></request>",
+            "<endDate>2026-10-21T00:00:00Z</endDate><limit>10</limit></request>",
             "WINDOW_INVALID",
             "calls[0]/request/startDate",
         ),
         (
             "getIwsRequests",
             "<request><iwsOperation>x</iwsOperation><startDate>2026-13-01T00:00:00Z</startDate>"
-            "<endDate>2026-10-21T00:00:00Z</endDate><Limit>10</Limit></request>",
+            "<endDate>2026-10-21T00:00:00Z</endDate><limit>10</limit></request>",
             "WINDOW_INVALID",
             "calls[0]/request/startDate",
         ),
         (
             "getIwsRequests",
-            "<request><iwsOperation>x</iwsOperation><endDate>2026-10-21T00:00:00Z</endDate><Limit>10</Limit></request>",
+            "<request><iwsOperation>x</iwsOperation><endDate>2026-10-21T00:00:00Z</endDate><limit>10</limit></request>",
             "WINDOW_MISSING",
             "calls[0]/request/startDate",
         ),
         (
             "getIwsRequests",
             "<request><iwsOperation>x</iwsOperation><startDate>2026-10-20T00:00:00Z</startDate>"
-            "<endDate>2026-10-21T00:00:00Z</endDate><Limit>101</Limit></request>",
+            "<endDate>2026-10-21T00:00:00Z</endDate><limit>101</limit></request>",
             "LIMIT_OUT_OF_RANGE",
-            "calls[0]/request/Limit",
+            "calls[0]/request/limit",
         ),
         (
             "getIwsRequests",
             "<request><iwsOperation>x</iwsOperation><startDate>2026-10-20T00:00:00Z</startDate>"
             "<endDate>2026-10-21T00:00:00Z</endDate></request>",
             "LIMIT_MISSING",
-            "calls[0]/request/Limit",
+            "calls[0]/request/limit",
         ),
     ],
 )
@@ -422,6 +451,30 @@ def test_bulk_pulls_are_refused(
     location: str,
 ) -> None:
     error = refuse(build([make_call("read", operation, request_xml)]))
+    assert (error.code, error.location) == (code, location)
+
+
+@pytest.mark.parametrize(
+    ("request_xml", "code", "location"),
+    [
+        (
+            "<request><reportCategory>x</reportCategory></request>",
+            "LIMIT_MISSING",
+            "calls[0]/request/limit",
+        ),
+        ("<request><limit>101</limit></request>", "LIMIT_OUT_OF_RANGE", "calls[0]/request/limit"),
+        (
+            "<request><limit>5</limit><startRow>201</startRow></request>",
+            "LIMIT_OUT_OF_RANGE",
+            "calls[0]/request/startRow",
+        ),
+    ],
+)
+def test_report_types_are_paged(
+    refuse: Refuse, build: Build, make_call: MakeCall, request_xml: str, code: str, location: str
+) -> None:
+    # Report metadata, but paged like the other reads, so its reply has a row limit.
+    error = refuse(build([make_call("read", "getReportTypes", request_xml, endpoint="reporting")]))
     assert (error.code, error.location) == (code, location)
 
 
@@ -474,6 +527,6 @@ def test_the_smart_filter_is_refused(
 
 def test_a_limit_name_in_the_wrong_case(refuse: Refuse, build: Build, make_call: MakeCall) -> None:
     error = refuse(
-        build([make_call("e", "getEVoucherInventory", "<request><Limit>5</Limit></request>")])
+        build([make_call("e", "getEvoucherInventory", "<request><Limit>5</Limit></request>")])
     )
     assert (error.code, error.location) == ("ELEMENT_NAME_CASE", "calls[0]/request/limit")

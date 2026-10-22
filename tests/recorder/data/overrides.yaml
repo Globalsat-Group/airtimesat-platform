@@ -55,13 +55,13 @@ entries:
   - {operation: getVessels, direction: response, path: getVesselsResponse, treatment: KEEP}
   - {operation: getVessels, direction: response, path: getVesselsResponse/vessel, treatment: KEEP}
   - {operation: getVessels, direction: response, path: getVesselsResponse/vessel/vesselName, treatment: T-STR, type: VESSEL}
-  - {operation: getSubscriberOrgs, direction: request, path: request, treatment: KEEP}
-  - {operation: getSubscriberOrgs, direction: request, path: request/Id, treatment: T-STR, type: ORG}
-  - {operation: getSubscriberOrgs, direction: request, path: request/Name, treatment: T-STR, type: ORG}
-  - {operation: getSubscriberOrgs, direction: response, path: getSubscriberOrgsResponse, treatment: KEEP}
+  - {operation: getSubscriberOrganizations, direction: request, path: request, treatment: KEEP}
+  - {operation: getSubscriberOrganizations, direction: request, path: request/id, treatment: T-STR, type: ORG}
+  - {operation: getSubscriberOrganizations, direction: request, path: request/name, treatment: T-STR, type: ORG}
+  - {operation: getSubscriberOrganizations, direction: response, path: getSubscriberOrganizationsResponse, treatment: KEEP}
   - {operation: bulkActionSearch, direction: request, path: request, treatment: KEEP}
   - {operation: bulkActionSearch, direction: request, path: request/bulkRequestId, treatment: KEEP, operational: true}
-  - {operation: bulkActionSearch, direction: request, path: request/Wildcard, treatment: KEEP}
+  - {operation: bulkActionSearch, direction: request, path: request/wildcard, treatment: KEEP}
   - {operation: bulkActionSearch, direction: response, path: bulkActionSearchResponse, treatment: KEEP}
   - {operation: getRechargeHistory, direction: request, path: request, treatment: KEEP}
   - {operation: getRechargeHistory, direction: request, path: request/msisdn, treatment: T-NUM, type: MSISDN}
@@ -72,15 +72,15 @@ entries:
   - {operation: getPrepaidAccountDetail, direction: request, path: request/spAccount, treatment: C, type: SP}
   - {operation: getPrepaidAccountDetail, direction: request, path: request/ownerName, treatment: P-ONE, type: NAME}
   - {operation: getPrepaidAccountDetail, direction: response, path: getPrepaidAccountDetailResponse, treatment: KEEP}
-  - {operation: getEVoucherInventory, direction: request, path: request, treatment: KEEP}
-  - {operation: getEVoucherInventory, direction: request, path: request/limit, treatment: KEEP}
-  - {operation: getEVoucherInventory, direction: request, path: request/startRow, treatment: KEEP}
-  - {operation: getEVoucherInventory, direction: response, path: getEVoucherInventoryResponse, treatment: KEEP}
+  - {operation: getEvoucherInventory, direction: request, path: request, treatment: KEEP}
+  - {operation: getEvoucherInventory, direction: request, path: request/limit, treatment: KEEP}
+  - {operation: getEvoucherInventory, direction: request, path: request/startRow, treatment: KEEP}
+  - {operation: getEvoucherInventory, direction: response, path: getEvoucherInventoryResponse, treatment: KEEP}
   - {operation: getIwsRequests, direction: request, path: request, treatment: KEEP}
   - {operation: getIwsRequests, direction: request, path: request/iwsOperation, treatment: KEEP}
   - {operation: getIwsRequests, direction: request, path: request/startDate, treatment: KEEP}
   - {operation: getIwsRequests, direction: request, path: request/endDate, treatment: KEEP}
-  - {operation: getIwsRequests, direction: request, path: request/Limit, treatment: KEEP}
+  - {operation: getIwsRequests, direction: request, path: request/limit, treatment: KEEP}
   - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse, treatment: KEEP}
   - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse/iwsLog, treatment: KEEP}
   - {operation: getIwsRequests, direction: response, path: getIwsRequestsResponse/iwsLog/requestId, treatment: KEEP, operational: true}
@@ -103,5 +103,8 @@ entries:
   - {operation: getSystemStatus, direction: request, path: request, treatment: KEEP}
   - {operation: getSystemStatus, direction: response, path: getSystemStatusResponse, treatment: KEEP}
   - {operation: getReportTypes, direction: request, path: request, treatment: KEEP}
+  - {operation: getReportTypes, direction: request, path: request/limit, treatment: KEEP}
+  - {operation: getReportTypes, direction: request, path: request/startRow, treatment: KEEP}
+  - {operation: getReportTypes, direction: request, path: request/reportCategory, treatment: KEEP}
   - {operation: getReportTypes, direction: response, path: getReportTypesResponse, treatment: KEEP}
 templates: []

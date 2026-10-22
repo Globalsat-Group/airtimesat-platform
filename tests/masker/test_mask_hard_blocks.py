@@ -269,7 +269,7 @@ def test_sp_wide_writes_and_others_by_name(operation: str, code: str) -> None:
     [
         ("AccountSearch", "provisioning", "OPERATION_WRONG_CASE"),
         ("accountsearch", "provisioning", "OPERATION_WRONG_CASE"),
-        ("getSubscriberOrganizations", "provisioning", "OPERATION_UNKNOWN"),
+        ("getSubscriberOrgs", "provisioning", "OPERATION_UNKNOWN"),
         ("accountSearch2", "provisioning", "OPERATION_UNKNOWN"),
         ("", "provisioning", "OPERATION_UNKNOWN"),
         ("getReportTypes", "provisioning", "OPERATION_ENDPOINT_MISMATCH"),

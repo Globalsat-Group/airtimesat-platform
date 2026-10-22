@@ -16,7 +16,8 @@ from typing import Final
 from airtimesat_platform.masker.errors import MaskingBlockedError
 from airtimesat_platform.masker.xmlsafe import MAX_RESPONSE_BYTES, local_name, parse, serialize
 
-# TODO(W): confirm the entry and field names against the WSDL snapshot (catalog names).
+# Names confirmed against the WSDL snapshot: getIwsRequests returns iwsLogs/iwsLog entries,
+# each with one caller and one requestId (both xs:string).
 LOG_ENTRY: Final = "iwsLog"
 CALLER_FIELD: Final = "caller"
 RECORDER_PREFIX: Final = "rec."

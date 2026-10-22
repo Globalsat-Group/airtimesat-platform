@@ -50,6 +50,14 @@ DEFAULT_ALLOWLIST: Final = REPO_ROOT / "scripts" / "leak_scan_allow.toml"
 STRICT_PREFIXES: Final = ("tests/fixtures/", "recording-plans/")
 CANARY_PREFIXES: Final = ("tests/leak/", "tests/masker/")
 STANDARD_SKIP: Final = frozenset({Detector.IMO})
+# The generated field map holds only element and type names of the WSDL snapshot (scanned
+# itself), joined by "/"; the drift test (tests/test_generate_fieldmap.py) keeps it equal to
+# scripts/generate_fieldmap.py's output. A path run of exactly 27 such characters looks like
+# an unpadded HMAC-SHA1 to SIGNATURE (78 paths of the first map), so that one detector is off
+# for that one file. Every other detector still runs on it.
+PATH_SKIP: Final = {
+    "src/airtimesat_platform/gateway/wsdl/fieldmap/generated.yaml": frozenset({Detector.SIGNATURE})
+}
 COMPRESSED_SUFFIXES: Final = frozenset(
     {".gz", ".zip", ".bz2", ".xz", ".zst", ".7z", ".tar", ".tgz", ".jar", ".whl", ".age"}
 )
@@ -165,7 +173,8 @@ class Scanner:
         strict = is_strict(path)
         options = Options(
             boundary=Boundary.DIGIT if strict else Boundary.ALNUM,
-            skip=frozenset() if strict else STANDARD_SKIP,
+            skip=(frozenset[Detector]() if strict else STANDARD_SKIP)
+            | PATH_SKIP.get(path, frozenset[Detector]()),
         )
         exempt = offline_exemption(allow_canary=path.startswith(CANARY_PREFIXES))
         found: list[str] = []

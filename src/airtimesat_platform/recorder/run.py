@@ -106,11 +106,13 @@ SITEST_SECRETS: Final = (SECRET_IWS_USERNAME, SECRET_KEY)
 RECORD_CAP: Final = 500
 SUBSCRIBER: Final = SPECS["CONTRACT"]
 IWS_LOG: Final = "getIwsRequests"
-# Its input may name only an IWS request id of a recorder call (§5.3).
+# Its input may name only an IWS request id of a recorder call (§5.3). The WSDL names the
+# input requestId, as the IWS log entries name their id.
 IWS_REQUEST: Final = "getIwsRequest"
 REQUEST_ID: Final = "requestId"
-# TODO(W): queue entry ids are their own id space, not IWS request ids, and D2's reads create
-# no queue entry. Refused until W confirms the names and the recorder records its own ids.
+# Its input is queueEntryId. The WSDL confirms queue entries are their own id space (a queue
+# entry's id; no IWS request id in it), and D2's reads create no queue entry, so no recorded
+# id could match: refused until the recorder records queue entry ids of its own writes.
 QUEUE_ENTRY: Final = "getQueueEntry"
 # Fail-closed failures that write nothing and stop the run but leave the method enabled (§8.4):
 # an exception, a timeout, the vault or a key, a non-SOAP or oversized body, too many rows.
@@ -470,7 +472,8 @@ class _Runner:
     def _set_by_recorder(self, call: Call, body: bytes) -> bytes:
         """Set D1's ``set_by_recorder`` elements to the recorder's caller (§5.5 step 8).
 
-        That is ``getQueueEntries.createdBy``: only the recorder's own entries come back.
+        That is ``getQueueEntries.createdBy``: only the recorder's own entries come back. It is
+        appended last, where the WSDL puts it (after ``endpoint`` and ``status``).
         """
         rules = LIMITS.get(call.operation)
         if rules is None or not rules.set_by_recorder:
