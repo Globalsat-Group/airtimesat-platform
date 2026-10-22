@@ -3,13 +3,18 @@
 Commands (``inventory add`` and ``note`` arrive in S2 PR D3):
 
 - ``recorder check <plan>...``: see below.
+- ``recorder init --data-dir <abs> --backup-dir <abs> [--new-keys]``: create the identity,
+  the configuration and the secrets files, once (``init``).
+- ``recorder doctor``: read-only checks of the trusted machine (``doctor``).
+- ``recorder rekey``: a new identity and passphrase for the secrets files (``init``).
 - ``recorder run <plan> [--dry-run]``: run a reviewed plan's reads, or dry-run it (``run``).
-- ``recorder keys init``: write four new masking keys to standard output for Keeper (``admin``).
+- ``recorder keys init``: write four new masking keys to a pipe (``admin``).
 - ``recorder backup``: write an age-encrypted vault backup (``admin``).
 - ``recorder incident clear <id>``: re-enable the method an incident blocked (``admin``).
 
-``run``, ``backup`` and ``incident clear`` read the configuration (``config``, ``--config``)
-and run only on the trusted machine. Every command exits 0 on success, 1 when refused or
+``run``, ``backup``, ``incident clear`` and ``doctor`` read the configuration (``config``,
+``--config``), which ``init`` writes, and every command but ``check`` runs only on the trusted
+machine. Every command exits 0 on success, 1 when refused or
 stopped, and 2 on a usage error, and prints codes, never a value.
 
 ``recorder check <plan>...`` needs no secret, no vault and no network, so it also runs in CI
@@ -34,7 +39,7 @@ from airtimesat_platform.gateway.sitest_port import generated_field_map_text
 from airtimesat_platform.masker.errors import MaskingError, safe_path
 from airtimesat_platform.masker.fieldmap.loader import build_field_map, packaged_overrides
 from airtimesat_platform.masker.logsafe import install_excepthook
-from airtimesat_platform.recorder import admin
+from airtimesat_platform.recorder import admin, doctor, init
 from airtimesat_platform.recorder.config import load_config
 from airtimesat_platform.recorder.errors import PlanRefusedError
 from airtimesat_platform.recorder.plan import FieldMapContext, check_plan, read_plan_file
@@ -74,20 +79,34 @@ def _parser() -> argparse.ArgumentParser:
         description="Check recording plans. Exit 0: all valid; 1: any refused; 2: usage.",
     )
     check.add_argument("plans", nargs="+", metavar="plan", help="a recording plan file")
+    setup = commands.add_parser(
+        "init", help="create the identity, configuration and secrets files (trusted machine)"
+    )
+    setup.add_argument("--data-dir", type=Path, required=True, help="absolute data folder")
+    setup.add_argument("--backup-dir", type=Path, required=True, help="absolute backup folder")
+    setup.add_argument(
+        "--new-keys",
+        action="store_true",
+        help="make new masking keys for an existing identity (runbook 06 case 4 only)",
+    )
+    checks = commands.add_parser("doctor", help="read-only checks of the trusted machine")
+    rekey = commands.add_parser(
+        "rekey", help="new identity and passphrase for the secrets files (runbook 06 case 7)"
+    )
     run = commands.add_parser("run", help="run a reviewed plan's reads (trusted machine)")
     run.add_argument("plan", help="the recording plan file")
     run.add_argument("--dry-run", action="store_true", help="check and show; never call IWS")
     keys = commands.add_parser("keys", help="masking keys").add_subparsers(
         dest="action", required=True
     )
-    keys.add_parser("init", help="write four new keys to standard output for Keeper")
+    keys.add_parser("init", help="write four new keys to a pipe")
     backup = commands.add_parser("backup", help="write an age-encrypted vault backup")
     incident = commands.add_parser("incident", help="incidents").add_subparsers(
         dest="action", required=True
     )
     clear = incident.add_parser("clear", help="re-enable the method an incident blocked")
     clear.add_argument("id", type=int, help="the incident id")
-    for command in (run, backup, clear):
+    for command in (setup, checks, rekey, run, backup, clear):
         command.add_argument("--config", type=Path, help="configuration file")
     return parser
 
@@ -153,6 +172,20 @@ def main(
     try:
         if command == "keys":
             admin.keys_init(stream)
+            return EXIT_OK
+        if command == "init":
+            init.init(
+                args.data_dir,
+                args.backup_dir,
+                config_path=args.config,
+                out=stream,
+                new_masker_keys=args.new_keys,
+            )
+            return EXIT_OK
+        if command == "doctor":
+            return doctor.doctor(args.config, out=stream)
+        if command == "rekey":
+            init.rekey(args.config, out=stream, now=now())
             return EXIT_OK
         config = load_config(args.config)
         if command == "run":

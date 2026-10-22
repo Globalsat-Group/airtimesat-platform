@@ -1,8 +1,8 @@
 """The masking keys, held in memory for one run (design §4.3, §6.2).
 
-The recorder reads them from the Keeper CLI on standard input into ``SecretValue`` objects
-and hands them here. This module decodes and checks them; it never reads a file, an
-environment variable or a log, and nothing in it prints a key.
+The recorder decrypts them from ``masker-keys.json.age`` (or reads them from standard input)
+into ``SecretValue`` objects and hands them here. This module decodes and checks them; it
+never reads a file, an environment variable or a log, and nothing in it prints a key.
 """
 
 import base64
@@ -57,7 +57,7 @@ class Key:
 
 
 def decode_key(secret: SecretValue) -> Key:
-    """Decode a key piped from Keeper: 64 hexadecimal characters or standard Base64.
+    """Decode a key loaded by the recorder: 64 hexadecimal characters or standard Base64.
 
     Raises ``MaskingError("KEY_INVALID")`` without the value.
     """
@@ -96,5 +96,5 @@ class MaskingKeys:
     def from_secrets(
         cls, k_mask: SecretValue, vault_key: SecretValue, known_value_key: SecretValue
     ) -> "MaskingKeys":
-        """Decode the keys loaded from Keeper."""
+        """Decode the keys loaded by the recorder."""
         return cls(decode_key(k_mask), decode_key(vault_key), decode_key(known_value_key))

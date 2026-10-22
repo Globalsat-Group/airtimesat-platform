@@ -65,7 +65,7 @@ def test_keys_init_refuses_a_terminal() -> None:
 
 
 def keys_through_a_pipe() -> tuple[int, str]:
-    """Run ``keys init`` with standard output on a pipe, as into the Keeper CLI."""
+    """Run ``keys init`` with standard output on a pipe."""
     read_fd, write_fd = os.pipe()
     with os.fdopen(write_fd, "w", encoding="utf-8") as writer:
         code = main(["keys", "init"], out=writer)
@@ -86,7 +86,7 @@ def test_keys_init_writes_four_distinct_keys_the_masker_accepts() -> None:
 
 
 def test_keys_init_refuses_a_file_or_a_stream_without_a_descriptor(tmp_path: Path) -> None:
-    # Design §6.2: the keys go to the Keeper CLI, never to a file.
+    # Design §6.2: the keys go to a pipe, never to a file.
     target = tmp_path / "keys.json"
     with target.open("w", encoding="utf-8") as handle:
         assert main(["keys", "init"], out=handle) == 1

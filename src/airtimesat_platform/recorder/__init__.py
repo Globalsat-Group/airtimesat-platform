@@ -9,7 +9,11 @@ only. Imports only ``common``, ``masker`` and ``gateway.sitest_port``. Design
 - ``plan``: the strict plan loader, schema, references and canonical digest.
 - ``policy.allowlist``: the read allowlist and its per-method limits.
 - ``policy.hard_blocks``: DEACTIVE, bulk, always-refused methods and request shape.
-- ``run``: ``recorder run`` for reads, with process hardening and fail-closed handling.
+- ``run``: ``recorder run`` for reads, with fail-closed handling.
+- ``hardening``: no core dumps and not dumpable, before any secret enters memory.
+- ``agefiles``: the identity and the two age-encrypted secrets files, and their decryption.
+- ``init``: ``recorder init`` (the one-time setup of those files) and ``recorder rekey``.
+- ``doctor``: ``recorder doctor``, read-only checks of the trusted machine.
 - ``store``: the SQLite vault store, run log, incidents and (for D3) test inventory.
 - ``checkout``, ``output``, ``config``, ``admin``: the git checks, the staged files and scans,
   the configuration file, and ``keys init``, ``backup`` and ``incident clear``.

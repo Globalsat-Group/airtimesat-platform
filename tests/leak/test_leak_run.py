@@ -136,7 +136,7 @@ def test_the_process_is_hardened_before_secrets_are_read(
 def test_hardening_disables_core_dumps_and_dumping() -> None:
     script = (
         "import ctypes, resource, sys\n"
-        "from airtimesat_platform.recorder.run import harden_process\n"
+        "from airtimesat_platform.recorder.hardening import harden_process\n"
         "harden_process()\n"
         "assert resource.getrlimit(resource.RLIMIT_CORE) == (0, 0)\n"
         "if sys.platform.startswith('linux'):\n"

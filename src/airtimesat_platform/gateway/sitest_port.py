@@ -70,7 +70,7 @@ from airtimesat_platform.gateway.sitest_guard import (
 )
 from airtimesat_platform.gateway.transport import AiohttpTransport, Transport
 
-# Names of the SITEST record's fields as piped by the Keeper CLI (common.secrets_stdin).
+# Names of the SITEST record's fields, in sitest.json.age or on standard input (names only).
 # These are names, not values (hence the S105 waivers).
 SECRET_IWS_USERNAME: Final = "sitest.iws_username"  # noqa: S105
 SECRET_KEY: Final = "sitest.secret_key"  # noqa: S105

@@ -1,8 +1,9 @@
 """``recorder keys init``, ``recorder backup`` and ``recorder incident clear``.
 
-- ``keys init`` (design §6.2) generates the four 256-bit masking keys once and writes one
-  JSON object of name-to-hex pairs to standard output, for the Keeper CLI to store. It
-  writes only to a pipe or a socket: never to a terminal (scrollback) or a file.
+- ``keys init`` (design §6.2) generates the four 256-bit masking keys and writes one JSON
+  object of name-to-hex pairs to standard output. It writes only to a pipe or a socket:
+  never to a terminal (scrollback) or a file. ``recorder init`` uses the same generator
+  (``new_keys``) and encrypts the keys itself, so the runbooks no longer need this command.
 - ``backup`` (§6.3) snapshots the vault with SQLite's backup API into memory and pipes the
   bytes through ``age`` to the configured recipient: no plaintext file, ever. It writes
   ``vault-<UTC>.sqlite.age`` and deletes backups older than 30 days in the backup folder.
@@ -30,6 +31,11 @@ BACKUP_NAME: Final = re.compile(r"vault-([0-9]{8}T[0-9]{6}Z)\.sqlite\.age")
 AGE_TIMEOUT_S: Final = 300
 
 
+def new_keys() -> dict[str, str]:
+    """Return four new 256-bit keys, by name, as hexadecimal text."""
+    return {name: secrets.token_hex(KEY_BYTES) for name in KEY_NAMES}
+
+
 def keys_init(out: TextIO) -> None:
     """Write four new keys as one JSON object; refuse anything but a pipe or a socket."""
     if out.isatty():
@@ -40,8 +46,7 @@ def keys_init(out: TextIO) -> None:
         mode = 0
     if not (stat.S_ISFIFO(mode) or stat.S_ISSOCK(mode)):
         raise RecorderError("KEYS_NOT_PIPED")
-    keys = {name: secrets.token_hex(KEY_BYTES) for name in KEY_NAMES}
-    out.write(json.dumps(keys) + "\n")
+    out.write(json.dumps(new_keys()) + "\n")
     out.flush()
 
 
