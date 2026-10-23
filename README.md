@@ -54,20 +54,20 @@ uv sync --locked   # install the locked dependencies into .venv
 make check         # every gate CI runs
 ```
 
-`make check` runs these targets, each also runnable on its own. CI runs one job per target, with the same name except `test`, whose job is `tests`, and `plans`, whose CI counterpart is `recorder-check`:
+`make check` runs these targets, each also runnable on its own. In CI, `make test` is the `tests` job, `make plans` has the counterpart `recorder-check`, and every other target is a step of the one `checks` job (GitHub bills each job for at least a minute):
 
 | Target | What it runs | CI job |
 | --- | --- | --- |
-| `make lint` | `ruff check`, `ruff format --check` | `lint` |
-| `make typecheck` | `pyright` (strict) | `typecheck` |
-| `make contracts` | `lint-imports` | `contracts` |
+| `make lint` | `ruff check`, `ruff format --check` | `checks` |
+| `make typecheck` | `pyright` (strict) | `checks` |
+| `make contracts` | `lint-imports` | `checks` |
 | `make test` | `pytest` | `tests` |
 | `make plans` | the working tree's `recorder check` over the plans changed against `origin/main`; anything in `recording-plans/` that is not a regular file fails | `recorder-check`: the plans the pull request changes, judged by the base commit's checker |
-| `make security` | gitleaks on the working tree, `pip-audit`, licence gate | `security` |
-| `make terraform` | `terraform fmt -check`, `init -backend=false -lockfile=readonly` + `validate` for `envs/sandbox`, checkov | `terraform` |
-| `make workflows` | `actionlint`, a check that bans `pull_request_target`, `workflow_run` and `issue_comment`, checkov on `.github/workflows` | `workflows` |
+| `make security` | gitleaks on the working tree, `pip-audit`, licence gate | `checks` |
+| `make terraform` | `terraform fmt -check`, `init -backend=false -lockfile=readonly` + `validate` for `envs/sandbox`, checkov | `checks` |
+| `make workflows` | `actionlint`, a check that bans `pull_request_target`, `workflow_run` and `issue_comment`, checkov on `.github/workflows` | `checks` |
 
-The CI `security` job also runs gitleaks over the full git history.
+The CI `checks` job also runs gitleaks over the full git history and, on a pull request, the leak scan over its commits.
 
 Optional local hooks (ruff and gitleaks): `uvx pre-commit install`.
 

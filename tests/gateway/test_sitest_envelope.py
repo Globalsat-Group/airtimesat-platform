@@ -61,6 +61,7 @@ def test_envelope_shape_and_auth_order() -> None:
         "serviceProviderAccountNumber",
         "timestamp",
         "caller",
+        "callerPassword",
         "filterType",
         "filterValue",
         "limit",
@@ -68,7 +69,12 @@ def test_envelope_shape_and_auth_order() -> None:
     assert request.findtext("signature") == FAKE_SIGNATURE
     assert request.findtext("timestamp") == "2026-10-20T12:00:00Z"
     assert request.findtext("caller") == "rec.RP-2026-001"
-    assert request.find("callerPassword") is None
+    # Always present and always empty (design §13 #36): no password is ever sent.
+    password = request.find("callerPassword")
+    assert password is not None
+    assert password.text is None
+    assert len(password) == 0
+    assert not password.attrib
 
 
 def test_sp_account_is_optional() -> None:
@@ -83,7 +89,13 @@ def test_sp_account_is_optional() -> None:
 
     root = etree.fromstring(build_envelope("authenticatedPing", "<request/>", factory))
     request = root[0][0][0]
-    assert [child.tag for child in request] == ["iwsUsername", "signature", "timestamp", "caller"]
+    assert [child.tag for child in request] == [
+        "iwsUsername",
+        "signature",
+        "timestamp",
+        "caller",
+        "callerPassword",
+    ]
 
 
 @pytest.mark.parametrize(

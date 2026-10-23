@@ -16,7 +16,8 @@ authentication injection and refuses, whatever the caller asks:
   device field, or an ``xsi:type`` naming a bulk type in a write;
 - a SOAP Header, more than one Body child, comments, processing instructions, a DTD, mixed
   content (text beside child elements, which a parser on the IWS side may join differently),
-  ``callerPassword``, or a ``caller`` without the ``rec.`` prefix.
+  any ``callerPassword`` but the single empty one right after ``caller``, or a ``caller``
+  without the ``rec.`` prefix.
 
 Values are compared after NFKC normalization, removal of format characters, trimming and
 case folding. No flag, option or argument lifts any of this.
@@ -365,9 +366,23 @@ def _check_auth(request: etree._Element) -> None:  # pyright: ignore[reportPriva
     for name in _OPTIONAL_AUTH:
         if direct.count(name) > 1:
             raise RefusedError("AUTH_FIELDS_INVALID")
-    for element in request.iter():
-        if _is_element(element) and _fold(_local(element)) == "callerpassword":
-            raise RefusedError("AUTH_FIELDS_INVALID")
+    # The core sends exactly one ``callerPassword``, empty, right after ``caller`` (the WSDL
+    # requires the element; design §13 #36). Any value, any other one, at any depth, is refused.
+    passwords = [
+        element
+        for element in request.iter()
+        if _is_element(element) and _fold(_local(element)) == "callerpassword"
+    ]
+    if (
+        len(passwords) != 1
+        or passwords[0].getparent() is not request
+        or _local(passwords[0]) != "callerPassword"
+        or passwords[0].text not in (None, "")
+        or len(passwords[0]) != 0
+        or len(passwords[0].attrib) != 0
+        or direct.index("callerPassword") != direct.index("caller") + 1
+    ):
+        raise RefusedError("AUTH_FIELDS_INVALID")
     caller = request.find("caller")
     if caller is None or not (caller.text or "").startswith(CALLER_PREFIX):
         raise RefusedError("CALLER_INVALID")

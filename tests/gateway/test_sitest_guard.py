@@ -22,7 +22,10 @@ SOAP = "http://www.w3.org/2003/05/soap-envelope"
 AUTH = (
     "<iwsUsername>user-fake0001</iwsUsername><signature>c2lnbmF0dXJlLW5vdC1yZWFsLTAwMDE=</signature>"
     "<timestamp>2026-10-20T12:00:00Z</timestamp><caller>rec.RP-2026-001</caller>"
+    "<callerPassword></callerPassword>"
 )
+EMPTY_CP_ELEMENT = "<callerPassword></callerPassword>"
+CALLER_ELEMENT = "<caller>rec.RP-2026-001</caller>"
 
 
 def _full_width(word: str) -> str:
@@ -206,6 +209,20 @@ def test_soap_11_envelope_is_refused() -> None:
         AUTH.replace("<caller>rec.RP-2026-001</caller>", ""),
         AUTH.replace("rec.RP-2026-001", "gs.tenant.user"),
         AUTH + "<callerPassword>x</callerPassword>",
+        AUTH + EMPTY_CP_ELEMENT,
+        AUTH.replace(EMPTY_CP_ELEMENT, ""),
+        AUTH.replace(EMPTY_CP_ELEMENT, "<callerPassword>x</callerPassword>"),
+        AUTH.replace(EMPTY_CP_ELEMENT, "<callerPassword> </callerPassword>"),
+        AUTH.replace(EMPTY_CP_ELEMENT, "<callerPassword><x/></callerPassword>"),
+        AUTH.replace(EMPTY_CP_ELEMENT, "<CallerPassword></CallerPassword>"),
+        AUTH.replace(
+            EMPTY_CP_ELEMENT,
+            '<callerPassword xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
+            ' xsi:nil="true"/>',
+        ),
+        AUTH.replace(EMPTY_CP_ELEMENT, "").replace(
+            CALLER_ELEMENT, EMPTY_CP_ELEMENT + CALLER_ELEMENT
+        ),
         AUTH + "<signature>c2lnbmF0dXJlLW5vdC1yZWFsLTAwMDI=</signature>",
         AUTH + "<serviceProviderAccountNumber>SP-0001</serviceProviderAccountNumber>" * 2,
     ],
@@ -218,9 +235,22 @@ def test_auth_fields_must_be_exactly_as_injected(auth: str) -> None:
 
 
 @pytest.mark.parametrize("name", ["callerPassword", "CallerPassword", "CALLERPASSWORD"])
-def test_caller_password_is_refused_at_any_depth_in_any_case(name: str) -> None:
-    code = _refused("accountUpdate", f"<a><{name}>x</{name}></a>")
+@pytest.mark.parametrize("value", ["x", ""])
+def test_caller_password_is_refused_at_any_depth_in_any_case(name: str, value: str) -> None:
+    code = _refused("accountUpdate", f"<a><{name}>{value}</{name}></a>")
     assert code == "AUTH_FIELDS_INVALID"
+
+
+def test_the_single_empty_caller_password_after_caller_passes() -> None:
+    # Design §13 #36: the WSDL requires callerPassword, and an empty one keeps caller
+    # audit-only. The self-closing form is the same element.
+    _check("getSystemStatus", "", allow_writes=False)
+    _check(
+        "getSystemStatus",
+        "",
+        allow_writes=False,
+        auth=AUTH.replace(EMPTY_CP_ELEMENT, "<callerPassword/>"),
+    )
 
 
 # ---------------------------------------------------------------- DEACTIVE (§5.7, §8.5 #11)

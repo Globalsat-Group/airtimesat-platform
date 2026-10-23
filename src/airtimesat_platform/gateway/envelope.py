@@ -6,7 +6,9 @@ a locked-down parser, checked, and copied element by element into a new tree (§
 
 - no SOAP Header, exactly one Body child, the operation element in the IWS namespace;
 - authentication fields are refused in the request and injected by the signer core as the
-  first children of ``<request>``, in the catalog's order;
+  first children of ``<request>``, in the catalog's order. ``callerPassword`` is always sent
+  and always empty: the WSDL requires the element, and with no password IWS uses ``caller``
+  for audit only (catalog; design §13 #36). No password is ever sent;
 - only unqualified elements, and only the ``xsi:type`` and ``xsi:nil`` attributes;
 - no comments, processing instructions, CDATA sections, DTDs or entities;
 - no mixed content;
@@ -235,7 +237,7 @@ def build_envelope(
         values.append(
             ("serviceProviderAccountNumber", auth.service_provider_account_number.reveal())
         )
-    values += [("timestamp", auth.timestamp), ("caller", auth.caller)]
+    values += [("timestamp", auth.timestamp), ("caller", auth.caller), ("callerPassword", "")]
     for index, (name, value) in enumerate(values):
         element = etree.Element(name)
         try:
