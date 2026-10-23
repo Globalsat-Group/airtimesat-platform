@@ -22,6 +22,7 @@ The path from here to the first recording: `03` Parts A to D, then `04`. `01` an
 | [`04_recording_session.md`](04_recording_session.md) | A recording session: dry run and live run (one passphrase prompt each), the masked output and manifest, the PR, the backup | For each merged plan you run, after `03` Part C |
 | [`05_manual_deactive.md`](05_manual_deactive.md) | Your manual DEACTIVE | Only when your own test plan needs it |
 | [`06_incidents.md`](06_incidents.md) | Refusals, leaks, compromise, a bad merge, a wrong-environment call | When needed |
+| [`07_manual_check_caller_password.md`](07_manual_check_caller_password.md) | One signed `getSystemStatus` in SoapUI with an empty `callerPassword`, with its two scripts in [`soapui/`](soapui/) | Once, before PR #21 merges (design §13 #36) |
 
 ## Rules for every runbook
 
