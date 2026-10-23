@@ -85,3 +85,15 @@ path = "src/airtimesat_platform/gateway/endpoints_sitest.py"
 detector = "IPV4"
 sha256 = "cd1c9712feab3cee8aeba9c6a56ef8a8960a18b9b88fc10a793958aca9e3c3c0"
 reason = "SITEST's pinned address, from the endpoint record of 21 Oct 2026 (runbook 02)"
+
+[[allow]]
+path = "docs/runbooks/07_manual_check_caller_password.md"
+detector = "IPV4"
+sha256 = "cd1c9712feab3cee8aeba9c6a56ef8a8960a18b9b88fc10a793958aca9e3c3c0"
+reason = "SITEST's address from the endpoint record of 21 Oct 2026, checked and pinned in /etc/hosts for the manual call (runbook 07 Part B)"
+
+[[allow]]
+path = "docs/runbooks/soapui/sign.groovy"
+detector = "SIGNATURE"
+sha256 = "b289ec925a923218f4106620c8466839f1e504f7be4e096d4581d629224266ef"
+reason = "The ST-02 offline vector of tests/gateway/test_signing.py (synthetic secret), used by the sign script's self-test"
